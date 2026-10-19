@@ -10,7 +10,7 @@ import {
   type ProcessingStatus,
   type UserCategory,
 } from "@/lib/categories";
-import type { ScreenshotMetadata } from "@/lib/metadata";
+import { metadataLabels, type ScreenshotMetadata } from "@/lib/metadata";
 
 export type ScreenshotCardData = {
   id: string;
@@ -71,11 +71,7 @@ export function ScreenshotCard({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const category = categories.find((c) => c.id === screenshot.categoryId) ?? null;
-  const smartLabels = [
-    screenshot.metadata?.wifi && "WiFi",
-    screenshot.metadata?.flight && "Flight",
-    screenshot.metadata?.payment && "Payment",
-  ].filter((label): label is string => Boolean(label));
+  const smartLabels = metadataLabels(screenshot.metadata);
   const processing =
     !screenshot.stuck &&
     (screenshot.status === "pending" || screenshot.status === "processing");

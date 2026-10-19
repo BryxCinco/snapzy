@@ -2,13 +2,20 @@ import { google } from "@ai-sdk/google";
 import { APICallError, generateText, Output, RetryError } from "ai";
 import { z } from "zod";
 import { parseMetadata, type ScreenshotMetadata } from "@/lib/metadata";
+import { decodeQrCode, parseWifiQr } from "@/lib/qr-decode";
 
 // Older Flash models (1.5, 2.5) are closed to new API keys; Google's error
 // response points new users to 3.8 Flash. Override with GEMINI_MODEL.
 // 3.5 Flash is the fallback when the primary model is overloaded (503) or
 // unavailable to this key.
 const MODEL_IDS = [
-  ...new Set([process.env.GEMINI_MODEL || "gemini-3.8-flash", "gemini-3.5-flash"]),
+  ...new Set([
+    process.env.GEMINI_MODEL || "gemini-3.8-flash",
+    "gemini-3.5-flash",
+    // Separate (larger) free-tier quota: keeps uploads working after the
+    // Flash daily limit runs out.
+    "gemini-3.5-flash-lite",
+  ]),
 ];
 
 // Worth trying the next model: overloaded, rate-limited or model not offered.
@@ -64,15 +71,69 @@ const extractedSchema = z.object({
     .describe("Only for boarding passes, flight bookings or itineraries."),
   payment: z
     .object({
-      provider: text("e.g. GCash, Maya, BDO, the store name."),
-      amount: text("Total amount paid, digits as shown, without the currency sign."),
+      provider: text("e.g. GCash, Maya, BDO, PayPal."),
+      amount: text("Amount sent or received, digits as shown, without the currency sign."),
       currency: text("ISO code, e.g. PHP, USD."),
-      reference_number: text("Reference / transaction / receipt number."),
+      reference_number: text("Reference / transaction number."),
       recipient: text("Who was paid."),
       date: text("Transaction date and time as shown."),
     })
     .nullable()
-    .describe("Only for receipts, payment confirmations, GCash/Maya/bank transfers."),
+    .describe("Only for money transfers and payment confirmations: GCash, Maya, InstaPay, bank apps."),
+  receipt: z
+    .object({
+      merchant: text("Store or restaurant name."),
+      total: text("Grand total, digits as shown, without the currency sign."),
+      currency: text("ISO code, e.g. PHP, USD."),
+      date: text("Date and time as shown."),
+      receipt_number: text("Receipt, invoice or OR number."),
+      items: z
+        .array(
+          z.object({
+            name: z.string(),
+            quantity: text("Quantity, if shown."),
+            price: text("Line price, digits as shown."),
+          }),
+        )
+        .describe("Line items, at most 20. Empty array if not itemized."),
+    })
+    .nullable()
+    .describe("Only for store / restaurant receipts and invoices."),
+  credentials: z
+    .array(
+      z.object({
+        service: text("Website, app or account the login is for."),
+        username: text("Username, email or account ID."),
+        password: text("Password exactly as shown, case-sensitive."),
+      }),
+    )
+    .describe("Login details written in the image, e.g. a note with an account and password. Empty array if none."),
+  emails: z.array(z.string()).describe("Email addresses visible in the image."),
+  phones: z.array(z.string()).describe("Phone numbers exactly as shown, e.g. 0917 123 4567, +63 2 8123 4567."),
+  socials: z
+    .array(
+      z.object({
+        platform: z.string().describe("e.g. Facebook, Instagram, TikTok, X, YouTube, Discord."),
+        handle: text("@handle or username."),
+        url: text("Profile URL, if shown."),
+      }),
+    )
+    .describe("Social media accounts shown, e.g. on a profile page, business card or poster."),
+  names: z
+    .array(z.string())
+    .describe("Full names of people written in the image (contacts, senders, ID holders). Not brand names."),
+  links: z.array(z.string()).describe("Website URLs shown in the image."),
+  addresses: z.array(z.string()).describe("Street / mailing addresses shown in the image."),
+  codes: z
+    .array(
+      z.object({
+        kind: z.enum(["qr", "barcode"]),
+        value: z
+          .string()
+          .describe("For a barcode: the digits printed under it. For a QR code: only text printed next to it, never a guess."),
+      }),
+    )
+    .describe("QR codes and barcodes in the image whose value is readable as printed text."),
 });
 
 function buildSchema(categoryNames: [string, ...string[]]) {
@@ -110,10 +171,14 @@ ${list}
   If no category fits, choose "${fallbackName}".
 - tags: 2 or 3 short lowercase tags that would help find this later.
 - extracted: structured details, only when they are clearly visible:
-  wifi (network name, password), flight (boarding pass / booking details),
-  payment (amount and reference number from receipts, GCash, Maya or bank transfers).
+  wifi (network name, password); flight (boarding pass / booking details);
+  payment (GCash, Maya, bank transfers: amount, reference number);
+  receipt (store receipts: merchant, items, total); credentials (written
+  logins and passwords); emails; phones; socials (platform + handle);
+  names (people's names); links; addresses; codes (barcode digits, QR text).
   Copy values exactly as shown. Never guess or invent a value: use null for
-  anything not visible, and null for a whole section that doesn't apply.`;
+  anything not visible, null for a section that doesn't apply, and an empty
+  array when a list has nothing.`;
 }
 
 export async function analyzeScreenshot(
@@ -126,12 +191,16 @@ export async function analyzeScreenshot(
     string,
     ...string[],
   ];
-  const output = await generateWithFallback(
-    image,
-    mediaType,
-    buildSchema(names),
-    buildInstructions(categories, fallbackName),
-  );
+  // The QR decoder runs alongside the AI call; it's local and fast.
+  const [output, qrPayload] = await Promise.all([
+    generateWithFallback(
+      image,
+      mediaType,
+      buildSchema(names),
+      buildInstructions(categories, fallbackName),
+    ),
+    decodeQrCode(image),
+  ]);
 
   const tags = [
     ...new Set(
@@ -146,8 +215,27 @@ export async function analyzeScreenshot(
     summary: output.summary.trim(),
     category: output.category,
     tags,
-    metadata: parseMetadata(output.extracted),
+    metadata: mergeQr(parseMetadata(output.extracted), qrPayload),
   };
+}
+
+// A decoded QR payload is exact, so it replaces whatever QR value the model
+// read as text. A WiFi QR also fills the WiFi card.
+function mergeQr(
+  metadata: ScreenshotMetadata | null,
+  qrPayload: string | null,
+): ScreenshotMetadata | null {
+  if (!qrPayload) return metadata;
+  const merged: ScreenshotMetadata = { ...metadata };
+  const barcodes = (merged.codes ?? []).filter((c) => c.kind === "barcode");
+  merged.codes = [{ kind: "qr", value: qrPayload, source: "qr-decoder" }, ...barcodes];
+
+  const wifi = parseWifiQr(qrPayload);
+  if (wifi) merged.wifi = wifi;
+  else if (/^https?:\/\//i.test(qrPayload) && !merged.links?.includes(qrPayload)) {
+    merged.links = [...(merged.links ?? []), qrPayload];
+  }
+  return merged;
 }
 
 async function generateWithFallback(
