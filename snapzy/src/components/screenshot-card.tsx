@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { deleteScreenshot, retryProcessing } from "@/app/dashboard/actions";
-import type { Category, ProcessingStatus } from "@/lib/categories";
+import { type Category, isCategory, type ProcessingStatus } from "@/lib/categories";
 
 export type ScreenshotCardData = {
   id: string;
@@ -13,8 +13,18 @@ export type ScreenshotCardData = {
   // Pending/processing for too long — the background job likely died.
   stuck: boolean;
   summary: string | null;
-  category: Category | null;
+  // May still hold a value from the old category list until re-analyzed.
+  category: string | null;
   tags: string[];
+};
+
+type Props = {
+  screenshot: ScreenshotCardData;
+  selected: boolean;
+  // True while anything is selected: checkboxes stay visible and clicking
+  // the image toggles selection instead of doing nothing.
+  selectionMode: boolean;
+  onToggleSelect: (id: string) => void;
 };
 
 const dateFormat = new Intl.DateTimeFormat("en", {
@@ -23,27 +33,44 @@ const dateFormat = new Intl.DateTimeFormat("en", {
   year: "numeric",
 });
 
-const categoryStyles: Record<Category, string> = {
-  Code: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  Receipt: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
-  Schedule: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-  SocialMedia: "bg-pink-500/15 text-pink-300 ring-pink-500/30",
-  Meme: "bg-orange-500/15 text-orange-300 ring-orange-500/30",
+export const categoryStyles: Record<Category, string> = {
+  Person: "bg-pink-500/15 text-pink-300 ring-pink-500/30",
+  Place: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
+  Food: "bg-orange-500/15 text-orange-300 ring-orange-500/30",
+  Animal: "bg-lime-500/15 text-lime-300 ring-lime-500/30",
+  Product: "bg-fuchsia-500/15 text-fuchsia-300 ring-fuchsia-500/30",
+  Logo: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
+  QR: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
+  Receipt: "bg-teal-500/15 text-teal-300 ring-teal-500/30",
   Document: "bg-violet-500/15 text-violet-300 ring-violet-500/30",
+  Chat: "bg-blue-500/15 text-blue-300 ring-blue-500/30",
+  Code: "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
+  Meme: "bg-yellow-500/15 text-yellow-300 ring-yellow-500/30",
   Other: "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30",
 };
 
-const categoryLabels: Record<Category, string> = {
+export const categoryLabels: Record<Category, string> = {
+  Person: "People",
+  Place: "Places",
+  Food: "Food",
+  Animal: "Animals",
+  Product: "Products",
+  Logo: "Logos",
+  QR: "QR codes",
+  Receipt: "Receipts",
+  Document: "Documents",
+  Chat: "Chats & social",
   Code: "Code",
-  Receipt: "Receipt",
-  Schedule: "Schedule",
-  SocialMedia: "Social media",
-  Meme: "Meme",
-  Document: "Document",
+  Meme: "Memes",
   Other: "Other",
 };
 
-export function ScreenshotCard({ screenshot }: { screenshot: ScreenshotCardData }) {
+export function ScreenshotCard({
+  screenshot,
+  selected,
+  selectionMode,
+  onToggleSelect,
+}: Props) {
   const [isDeleting, startDelete] = useTransition();
   const [isRetrying, startRetry] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -51,8 +78,11 @@ export function ScreenshotCard({ screenshot }: { screenshot: ScreenshotCardData 
   const processing =
     !screenshot.stuck &&
     (screenshot.status === "pending" || screenshot.status === "processing");
+  const isLegacyCategory =
+    screenshot.category !== null && !isCategory(screenshot.category);
   const canRetry =
-    screenshot.status === "failed" || (screenshot.stuck && screenshot.status !== "done");
+    screenshot.status === "failed" ||
+    (screenshot.stuck && screenshot.status !== "done");
 
   function handleDelete() {
     if (!window.confirm("Are you sure you want to delete this screenshot?")) return;
@@ -73,11 +103,16 @@ export function ScreenshotCard({ screenshot }: { screenshot: ScreenshotCardData 
 
   return (
     <figure
-      className={`group mb-4 break-inside-avoid overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900 transition ${
-        isDeleting ? "pointer-events-none scale-95 opacity-40" : ""
-      }`}
+      className={`group mb-4 break-inside-avoid overflow-hidden rounded-xl border bg-zinc-900 transition ${
+        selected
+          ? "border-violet-500 ring-2 ring-violet-500/40"
+          : "border-zinc-800"
+      } ${isDeleting ? "pointer-events-none scale-95 opacity-40" : ""}`}
     >
-      <div className="relative overflow-hidden">
+      <div
+        className={`relative overflow-hidden ${selectionMode ? "cursor-pointer" : ""}`}
+        onClick={selectionMode ? () => onToggleSelect(screenshot.id) : undefined}
+      >
         {/* Plain <img>: signed URLs change on every render, so next/image's
             optimizer cache would never hit. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -111,7 +146,37 @@ export function ScreenshotCard({ screenshot }: { screenshot: ScreenshotCardData 
 
         <button
           type="button"
-          onClick={handleDelete}
+          role="checkbox"
+          aria-checked={selected}
+          aria-label={`Select ${screenshot.filename}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSelect(screenshot.id);
+          }}
+          className={`absolute top-2 left-2 grid h-7 w-7 place-items-center rounded-md ring-1 backdrop-blur transition focus-visible:opacity-100 ${
+            selected
+              ? "bg-violet-600 text-white ring-violet-400"
+              : "bg-zinc-950/70 text-transparent ring-white/20 hover:ring-white/50"
+          } ${selected || selectionMode ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+        >
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={3}
+            className="h-4 w-4"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 5 5 9-10" />
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDelete();
+          }}
           disabled={isDeleting}
           aria-label={`Delete ${screenshot.filename}`}
           title="Delete"
@@ -136,13 +201,21 @@ export function ScreenshotCard({ screenshot }: { screenshot: ScreenshotCardData 
 
       {(screenshot.category || screenshot.summary || canRetry || error) && (
         <figcaption className="space-y-2 p-3">
-          {screenshot.category && (
-            <span
-              className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${categoryStyles[screenshot.category]}`}
-            >
-              {categoryLabels[screenshot.category]}
-            </span>
-          )}
+          {screenshot.category &&
+            (isCategory(screenshot.category) ? (
+              <span
+                className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${categoryStyles[screenshot.category]}`}
+              >
+                {categoryLabels[screenshot.category]}
+              </span>
+            ) : (
+              <span
+                title="From the old category list. Re-analyze to update it."
+                className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium border border-dashed border-zinc-700 text-zinc-500"
+              >
+                {screenshot.category} · old
+              </span>
+            ))}
           {screenshot.summary && (
             <p className="line-clamp-3 text-sm text-zinc-300">
               {screenshot.summary}
@@ -157,10 +230,14 @@ export function ScreenshotCard({ screenshot }: { screenshot: ScreenshotCardData 
               ))}
             </ul>
           )}
-          {canRetry && (
+          {(canRetry || isLegacyCategory) && !processing && (
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-red-300">
-                {screenshot.stuck ? "Analysis timed out." : "AI analysis failed."}
+              <p className={`text-xs ${canRetry ? "text-red-300" : "text-zinc-500"}`}>
+                {canRetry
+                  ? screenshot.stuck
+                    ? "Analysis timed out."
+                    : "AI analysis failed."
+                  : "Old category."}
               </p>
               <button
                 type="button"
@@ -169,7 +246,7 @@ export function ScreenshotCard({ screenshot }: { screenshot: ScreenshotCardData 
                 className="flex items-center gap-1.5 rounded-md border border-zinc-700 px-2 py-1 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 disabled:opacity-60"
               >
                 {isRetrying && <Spinner />}
-                {screenshot.summary ? "Retry" : "Run AI"}
+                {screenshot.summary ? "Re-analyze" : "Run AI"}
               </button>
             </div>
           )}
@@ -180,7 +257,7 @@ export function ScreenshotCard({ screenshot }: { screenshot: ScreenshotCardData 
   );
 }
 
-function Spinner() {
+export function Spinner() {
   return (
     <svg aria-hidden viewBox="0 0 24 24" className="h-3.5 w-3.5 animate-spin">
       <circle

@@ -3,28 +3,23 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import { logout } from "@/app/(auth)/actions";
-import {
-  ScreenshotCard,
-  type ScreenshotCardData,
-} from "@/components/screenshot-card";
-import type { Category, ProcessingStatus } from "@/lib/categories";
+import type { ScreenshotCardData } from "@/components/screenshot-card";
+import { type ProcessingStatus, STUCK_AFTER_MS } from "@/lib/categories";
 import { createClient } from "@/lib/supabase/server";
-import { ProcessingPoller } from "./processing-poller";
+import { GalleryView } from "./gallery-view";
 import { UploadZone } from "./upload-zone";
 
 export const metadata: Metadata = { title: "Dashboard · Snapzy" };
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
-// A healthy analysis takes seconds; after this we assume the job died and
-// offer a retry instead of spinning forever.
-const STUCK_AFTER_MS = 3 * 60 * 1000;
 
 // With cacheComponents on, the page shell is static and anything that reads
 // the session (cookies) streams in behind <Suspense>.
 export default function DashboardPage() {
   return (
     <div className="flex flex-1 flex-col bg-zinc-950 text-zinc-100">
-      <header className="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
+      {/* Fixed h-16 so the sticky category tabs can sit right under it (top-16). */}
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-zinc-800 bg-zinc-950/90 px-6 backdrop-blur">
         <div className="flex items-center gap-2 font-semibold tracking-tight">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-linear-to-br from-violet-500 to-cyan-400 text-xs font-bold text-zinc-950">
             S
@@ -113,14 +108,7 @@ async function Gallery() {
   }
 
   if (!rows || rows.length === 0) {
-    return (
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 px-6 py-16 text-center">
-        <p className="font-medium text-zinc-200">No screenshots yet</p>
-        <p className="mt-1 text-sm text-zinc-500">
-          Drop one above or press Ctrl + V to paste from your clipboard.
-        </p>
-      </div>
-    );
+    return <GalleryView cards={[]} />;
   }
 
   // The bucket is private, so sign every path in one round trip.
@@ -153,29 +141,13 @@ async function Gallery() {
           (status === "pending" || status === "processing") &&
           now - startedAt > STUCK_AFTER_MS,
         summary: r.summary,
-        category: (r.category as Category | null) ?? null,
+        category: r.category ?? null,
         tags: extractTagNames(r.screenshot_tags),
       },
     ];
   });
 
-  const anyProcessing = cards.some(
-    (c) => !c.stuck && (c.status === "pending" || c.status === "processing"),
-  );
-
-  return (
-    <>
-      <ProcessingPoller active={anyProcessing} />
-      <p className="mb-4 text-sm text-zinc-500">
-        {cards.length} screenshot{cards.length === 1 ? "" : "s"}
-      </p>
-      <div className="columns-2 gap-4 md:columns-3 lg:columns-4">
-        {cards.map((card) => (
-          <ScreenshotCard key={card.id} screenshot={card} />
-        ))}
-      </div>
-    </>
-  );
+  return <GalleryView cards={cards} />;
 }
 
 // Only called after `await connection()`, so this is per-request time, not a

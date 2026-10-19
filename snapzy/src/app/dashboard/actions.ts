@@ -1,14 +1,23 @@
 "use server";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
+import { isCategory, STUCK_AFTER_MS } from "@/lib/categories";
 import { createClient } from "@/lib/supabase/server";
 import { isAllowedImageType, MAX_UPLOAD_BYTES } from "@/lib/uploads";
 import { processScreenshot } from "./process-screenshot";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
+export type BulkAnalyzeResult =
+  | { ok: true; queued: number; skipped: number }
+  | { ok: false; error: string };
 
 const BUCKET = "screenshots";
+// Caps one bulk request so a single click can't fire hundreds of AI calls.
+const MAX_BULK_IDS = 100;
+// Parallel AI calls during a bulk run; higher trips Gemini rate limits.
+const BULK_CONCURRENCY = 3;
 
 // Keep storage keys URL-safe; the original name is stored separately.
 function sanitizeFilename(name: string) {
@@ -92,6 +101,55 @@ export async function uploadScreenshot(
 export async function retryProcessing(
   screenshotId: string,
 ): Promise<ActionResult> {
+  const result = await analyzeMultipleScreenshots([screenshotId], {
+    includeDone: true,
+  });
+  if (!result.ok) return result;
+  if (result.queued === 0) return { ok: false, error: "Screenshot not found." };
+  return { ok: true };
+}
+
+type QueueRow = {
+  id: string;
+  storage_path: string;
+  mime_type: string | null;
+  status: string;
+  category: string | null;
+  processing_started_at: string | null;
+};
+
+// Failed items, items stuck mid-run, and items still carrying a category
+// from the old category list. Fresh pending/processing rows are skipped:
+// a background job is already working on them.
+function needsAnalysis(row: QueueRow, now: number) {
+  if (row.status === "failed") return true;
+  if (row.status === "pending" || row.status === "processing") {
+    const started = row.processing_started_at
+      ? new Date(row.processing_started_at).getTime()
+      : 0;
+    return now - started > STUCK_AFTER_MS;
+  }
+  return row.category !== null && !isCategory(row.category);
+}
+
+/**
+ * Runs AI analysis for several screenshots in the background.
+ * By default only failed, stuck or old-category items are queued;
+ * pass `includeDone` to re-analyze everything (e.g. "Re-analyze all").
+ */
+export async function analyzeMultipleScreenshots(
+  ids: string[],
+  options: { includeDone?: boolean } = {},
+): Promise<BulkAnalyzeResult> {
+  const uniqueIds = [...new Set(ids)].filter((id) => typeof id === "string");
+  if (uniqueIds.length === 0) return { ok: true, queued: 0, skipped: 0 };
+  if (uniqueIds.length > MAX_BULK_IDS) {
+    return {
+      ok: false,
+      error: `Select at most ${MAX_BULK_IDS} screenshots at a time.`,
+    };
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -100,44 +158,81 @@ export async function retryProcessing(
     return { ok: false, error: "You are not logged in." };
   }
 
-  // RLS makes this return nothing for someone else's screenshot.
-  const { data: row } = await supabase
+  // RLS drops any ids that belong to someone else.
+  const { data: rows, error } = await supabase
     .from("screenshots")
-    .select("id, storage_path, mime_type")
-    .eq("id", screenshotId)
-    .maybeSingle();
-  if (!row) {
-    return { ok: false, error: "Screenshot not found." };
+    .select("id, storage_path, mime_type, status, category, processing_started_at")
+    .in("id", uniqueIds);
+  if (error) {
+    return { ok: false, error: error.message };
   }
 
-  const { data: blob, error: downloadError } = await supabase.storage
-    .from(BUCKET)
-    .download(row.storage_path);
-  if (downloadError || !blob) {
-    return { ok: false, error: downloadError?.message ?? "Download failed." };
+  const now = Date.now();
+  const toQueue = (rows as QueueRow[]).filter(
+    (r) => options.includeDone || needsAnalysis(r, now),
+  );
+  if (toQueue.length === 0) {
+    return { ok: true, queued: 0, skipped: uniqueIds.length };
   }
 
-  await supabase
+  // Flip them to pending now so the cards show spinners on the next render.
+  const { error: markError } = await supabase
     .from("screenshots")
     .update({
       status: "pending",
       processing_error: null,
-      processing_started_at: new Date().toISOString(),
+      processing_started_at: new Date(now).toISOString(),
     })
-    .eq("id", row.id);
+    .in(
+      "id",
+      toQueue.map((r) => r.id),
+    );
+  if (markError) {
+    return { ok: false, error: markError.message };
+  }
 
-  const image = new Uint8Array(await blob.arrayBuffer());
-  after(() =>
-    processScreenshot(supabase, {
-      screenshotId: row.id,
-      userId: user.id,
-      image,
-      mediaType: row.mime_type || blob.type || "image/png",
-    }),
-  );
+  after(() => runQueue(supabase, user.id, toQueue));
 
   revalidatePath("/dashboard");
-  return { ok: true };
+  return {
+    ok: true,
+    queued: toQueue.length,
+    skipped: uniqueIds.length - toQueue.length,
+  };
+}
+
+async function runQueue(
+  supabase: SupabaseClient,
+  userId: string,
+  rows: QueueRow[],
+) {
+  const queue = [...rows];
+  const worker = async () => {
+    for (let row = queue.shift(); row; row = queue.shift()) {
+      const { data: blob, error } = await supabase.storage
+        .from(BUCKET)
+        .download(row.storage_path);
+      if (error || !blob) {
+        await supabase
+          .from("screenshots")
+          .update({
+            status: "failed",
+            processing_error: error?.message ?? "Could not download the image.",
+          })
+          .eq("id", row.id);
+        continue;
+      }
+      await processScreenshot(supabase, {
+        screenshotId: row.id,
+        userId,
+        image: new Uint8Array(await blob.arrayBuffer()),
+        mediaType: row.mime_type || blob.type || "image/png",
+      });
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(BULK_CONCURRENCY, rows.length) }, worker),
+  );
 }
 
 export async function deleteScreenshot(
