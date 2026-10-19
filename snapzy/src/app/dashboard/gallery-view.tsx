@@ -3,24 +3,24 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import {
-  categoryLabels,
-  categoryStyles,
   ScreenshotCard,
   type ScreenshotCardData,
   Spinner,
 } from "@/components/screenshot-card";
 import { Toaster } from "@/components/toast";
-import { CATEGORIES, type Category, isCategory } from "@/lib/categories";
+import { colorStyles, type UserCategory } from "@/lib/categories";
 import { analyzeMultipleScreenshots, searchScreenshots } from "./actions";
+import { ManageCategoriesButton } from "./manage-categories";
 import { ProcessingPoller } from "./processing-poller";
 
-// "all" = every photo; "unsorted" = not analyzed yet, or still carrying a
-// category from an older category list.
-type AlbumKey = "all" | "unsorted" | Category;
+// "all" = every photo; "unsorted" = no category yet (still analyzing or
+// analysis failed); anything else is a category id.
+type AlbumKey = string;
 
 type Album = {
   key: AlbumKey;
   label: string;
+  dot: string;
   cards: ScreenshotCardData[];
 };
 
@@ -35,31 +35,35 @@ function isProcessing(c: ScreenshotCardData) {
 function needsAnalysis(c: ScreenshotCardData) {
   if (c.status === "failed" || c.stuck) return true;
   if (isProcessing(c)) return false;
-  return c.category !== null && !isCategory(c.category);
+  return c.categoryId === null;
 }
 
-function albumKeyOf(c: ScreenshotCardData): AlbumKey {
-  return isCategory(c.category) ? c.category : "unsorted";
-}
-
-function parseAlbumKey(value: string | null): AlbumKey | null {
-  if (value === "all" || value === "unsorted" || isCategory(value)) return value;
-  return null;
-}
-
-function buildAlbums(cards: ScreenshotCardData[]): Album[] {
+function buildAlbums(cards: ScreenshotCardData[], categories: UserCategory[]): Album[] {
+  const known = new Set(categories.map((c) => c.id));
   const byKey = new Map<AlbumKey, ScreenshotCardData[]>();
-  for (const c of cards) {
-    const key = albumKeyOf(c);
-    byKey.set(key, [...(byKey.get(key) ?? []), c]);
+  for (const card of cards) {
+    const key = card.categoryId && known.has(card.categoryId) ? card.categoryId : "unsorted";
+    byKey.set(key, [...(byKey.get(key) ?? []), card]);
   }
-  const albums: Album[] = [{ key: "all", label: "All photos", cards }];
-  for (const category of CATEGORIES) {
-    const list = byKey.get(category);
-    if (list) albums.push({ key: category, label: categoryLabels[category], cards: list });
-  }
+
+  const albums: Album[] = [
+    {
+      key: "all",
+      label: "All photos",
+      dot: "bg-linear-to-br from-violet-400 to-cyan-300",
+      cards,
+    },
+    ...categories.map((c) => ({
+      key: c.id,
+      label: c.name,
+      dot: colorStyles[c.color].dot,
+      cards: byKey.get(c.id) ?? [],
+    })),
+  ];
   const unsorted = byKey.get("unsorted");
-  if (unsorted) albums.push({ key: "unsorted", label: "Unsorted", cards: unsorted });
+  if (unsorted) {
+    albums.push({ key: "unsorted", label: "Unsorted", dot: "bg-zinc-600", cards: unsorted });
+  }
   return albums;
 }
 
@@ -98,9 +102,15 @@ function useSearch(query: string, doneCount: number) {
   return { ...state, loading };
 }
 
-export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
+export function GalleryView({
+  cards,
+  categories,
+}: {
+  cards: ScreenshotCardData[];
+  categories: UserCategory[];
+}) {
   const searchParams = useSearchParams();
-  const openKey = parseAlbumKey(searchParams.get("album"));
+  const openKey = searchParams.get("album");
   const query = (searchParams.get("q") ?? "").trim();
   const searching = query !== "";
 
@@ -120,8 +130,14 @@ export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
       })
     : cards;
 
-  const albums = buildAlbums(matched);
+  const albums = buildAlbums(matched, categories);
   const openAlbum = openKey ? albums.find((a) => a.key === openKey) : undefined;
+
+  // Photo counts per category over the whole library (for the manage dialog).
+  const counts = new Map<string, number>();
+  for (const c of cards) {
+    if (c.categoryId) counts.set(c.categoryId, (counts.get(c.categoryId) ?? 0) + 1);
+  }
 
   // Drop ids of cards that no longer exist (e.g. deleted).
   const cardIds = new Set(cards.map((c) => c.id));
@@ -148,6 +164,13 @@ export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
       return next;
     });
   }
+
+  const selectMany = (ids: string[], select: boolean) =>
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((x) => cardIds.has(x)));
+      ids.forEach((id) => (select ? next.add(id) : next.delete(id)));
+      return next;
+    });
 
   function analyze(ids: string[], includeDone: boolean) {
     setNotice(null);
@@ -184,23 +207,12 @@ export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
     if (ok) analyze(list.map((c) => c.id), true);
   }
 
-  if (cards.length === 0) {
-    return (
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 px-6 py-16 text-center">
-        <p className="font-medium text-zinc-200">No photos yet</p>
-        <p className="mt-1 text-sm text-zinc-500">
-          Drop one above or press Ctrl + V to paste from your clipboard.
-        </p>
-      </div>
-    );
-  }
-
-  const albumSelectAll = (ids: string[], select: boolean) =>
-    setSelectedIds((prev) => {
-      const next = new Set([...prev].filter((x) => cardIds.has(x)));
-      ids.forEach((id) => (select ? next.add(id) : next.delete(id)));
-      return next;
-    });
+  const cardProps = {
+    categories,
+    selectedIds,
+    selectionMode,
+    onToggle: toggle,
+  };
 
   return (
     <>
@@ -212,6 +224,7 @@ export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
         openKey={searching ? openKey : (openAlbum?.key ?? null)}
         searching={searching}
         onOpen={openAlbumKey}
+        manage={<ManageCategoriesButton categories={categories} counts={counts} />}
       />
 
       {notice && (
@@ -223,36 +236,31 @@ export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
         </p>
       )}
 
-      {searching ? (
+      {cards.length === 0 ? (
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 px-6 py-16 text-center">
+          <p className="font-medium text-zinc-200">No photos yet</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            Drop one above or press Ctrl + V to paste from your clipboard.
+          </p>
+        </div>
+      ) : searching ? (
         <SearchResults
+          {...cardProps}
           query={query}
           loading={search.loading}
           error={search.error}
-          albumLabel={
-            openKey === null || openKey === "all"
-              ? null
-              : openKey === "unsorted"
-                ? "Unsorted"
-                : categoryLabels[openKey]
-          }
-          results={
-            openKey === null || openKey === "all" ? matched : (openAlbum?.cards ?? [])
-          }
-          selectedIds={selectedIds}
-          selectionMode={selectionMode}
-          onToggle={toggle}
-          onSelectAll={albumSelectAll}
+          albumLabel={openKey && openKey !== "all" ? (openAlbum?.label ?? null) : null}
+          results={openKey && openKey !== "all" ? (openAlbum?.cards ?? []) : matched}
+          onSelectAll={selectMany}
           onClearAlbum={() => openAlbumKey(null)}
         />
       ) : openAlbum ? (
         <AlbumDetail
+          {...cardProps}
           album={openAlbum}
-          selectedIds={selectedIds}
-          selectionMode={selectionMode}
           isAnalyzing={isAnalyzing}
           onBack={() => openAlbumKey(null)}
-          onToggle={toggle}
-          onSelectAll={albumSelectAll}
+          onSelectAll={selectMany}
           onReanalyze={() => reanalyze(openAlbum.cards, openAlbum.label)}
         />
       ) : (
@@ -313,22 +321,28 @@ export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
   );
 }
 
-// Sticky chip bar under the header: "Albums" home plus a chip per album.
+// Sticky chip bar under the header: "Albums" home, a chip per non-empty
+// album, and "Manage" for editing categories.
 function AlbumSwitcher({
   albums,
   openKey,
   searching,
   onOpen,
+  manage,
 }: {
   albums: Album[];
   openKey: AlbumKey | null;
   searching: boolean;
   onOpen: (key: AlbumKey | null) => void;
+  manage: React.ReactNode;
 }) {
   // While searching, the first chip means "all results" and the per-album
   // chips narrow the results, so the separate "All photos" chip is redundant.
-  const chips = searching ? albums.filter((a) => a.key !== "all") : albums;
+  const chips = albums.filter(
+    (a) => a.cards.length > 0 && !(searching && a.key === "all"),
+  );
   const homeActive = openKey === null || (searching && openKey === "all");
+
   const chip = (active: boolean) =>
     `flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition ${
       active
@@ -339,9 +353,9 @@ function AlbumSwitcher({
   return (
     <nav
       aria-label="Albums"
-      className="sticky top-16 z-20 -mx-4 mb-6 border-b border-zinc-800 bg-zinc-950/85 px-4 backdrop-blur sm:-mx-6 sm:px-6"
+      className="sticky top-16 z-20 -mx-4 mb-6 flex items-center gap-1 border-b border-zinc-800 bg-zinc-950/85 px-4 backdrop-blur sm:-mx-6 sm:px-6"
     >
-      <div className="flex gap-1 overflow-x-auto py-2 scrollbar-none">
+      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto py-2 scrollbar-none">
         <button
           type="button"
           aria-current={homeActive ? "page" : undefined}
@@ -377,14 +391,32 @@ function AlbumSwitcher({
             onClick={() => onOpen(a.key)}
             className={chip(openKey === a.key)}
           >
-            {a.label}
+            <span className="max-w-40 truncate">{a.label}</span>
             <span className={`text-xs tabular-nums ${openKey === a.key ? "text-zinc-500" : "text-zinc-600"}`}>
               {a.cards.length}
             </span>
           </button>
         ))}
       </div>
+      <span aria-hidden className="my-2 w-px self-stretch bg-zinc-800" />
+      {manage}
     </nav>
+  );
+}
+
+function DownloadZipLink({ albumKey, count }: { albumKey: AlbumKey; count: number }) {
+  return (
+    <a
+      href={`/dashboard/download?album=${encodeURIComponent(albumKey)}`}
+      download
+      title={`Download ${count} photo${count === 1 ? "" : "s"} as a ZIP`}
+      className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500"
+    >
+      <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" />
+      </svg>
+      <span className="hidden sm:inline">Download</span> ZIP
+    </a>
   );
 }
 
@@ -399,25 +431,34 @@ function AlbumGrid({
   onOpen: (key: AlbumKey) => void;
   onReanalyzeAll: () => void;
 }) {
+  // Albums with photos first; empty categories at the end so new custom
+  // ones are still visible.
+  const filled = albums.filter((a) => a.cards.length > 0);
+  const empty = albums.filter((a) => a.cards.length === 0);
+  const all = albums.find((a) => a.key === "all");
+
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-zinc-500">
-          {albums.length - 1} album{albums.length - 1 === 1 ? "" : "s"}
+          {filled.length - 1} album{filled.length - 1 === 1 ? "" : "s"}
         </p>
-        <button
-          type="button"
-          onClick={onReanalyzeAll}
-          disabled={isAnalyzing}
-          className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 disabled:opacity-60"
-        >
-          {isAnalyzing && <Spinner />}
-          Re-analyze all
-        </button>
+        <div className="flex items-center gap-2">
+          {all && <DownloadZipLink albumKey="all" count={all.cards.length} />}
+          <button
+            type="button"
+            onClick={onReanalyzeAll}
+            disabled={isAnalyzing}
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 disabled:opacity-60"
+          >
+            {isAnalyzing && <Spinner />}
+            Re-analyze all
+          </button>
+        </div>
       </div>
 
       <ul className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
-        {albums.map((album) => (
+        {[...filled, ...empty].map((album) => (
           <li key={album.key}>
             <AlbumCard album={album} onOpen={() => onOpen(album.key)} />
           </li>
@@ -430,22 +471,32 @@ function AlbumGrid({
 function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
   const covers = album.cards.slice(0, 4);
   const analyzing = album.cards.filter(isProcessing).length;
-  const dot =
-    album.key === "all"
-      ? "bg-linear-to-br from-violet-400 to-cyan-300"
-      : album.key === "unsorted"
-        ? "bg-zinc-600"
-        : categoryStyles[album.key].split(" ")[0];
+  const isEmpty = album.cards.length === 0;
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="group block w-full text-left outline-none"
+      disabled={isEmpty}
+      className="group block w-full text-left outline-none disabled:cursor-default"
     >
-      <div className="relative aspect-square overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900 transition group-hover:border-zinc-600 group-focus-visible:ring-2 group-focus-visible:ring-violet-500/60">
-        <Collage cards={covers} />
-        <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/50 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
+      <div
+        className={`relative aspect-square overflow-hidden rounded-2xl border transition group-focus-visible:ring-2 group-focus-visible:ring-violet-500/60 ${
+          isEmpty
+            ? "border-dashed border-zinc-800 bg-zinc-950"
+            : "border-zinc-800 bg-zinc-900 group-hover:border-zinc-600"
+        }`}
+      >
+        {isEmpty ? (
+          <div className="grid h-full place-items-center px-4 text-center text-xs text-zinc-600">
+            No photos yet
+          </div>
+        ) : (
+          <>
+            <Collage cards={covers} />
+            <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/50 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
+          </>
+        )}
         {album.cards.length > covers.length && (
           <span className="absolute right-2 bottom-2 rounded-full bg-zinc-950/80 px-2 py-0.5 text-xs font-medium text-zinc-200 ring-1 ring-white/10 backdrop-blur">
             +{album.cards.length - covers.length}
@@ -459,8 +510,10 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
         )}
       </div>
       <div className="mt-2 flex items-center gap-2">
-        <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
-        <p className="truncate font-medium text-zinc-100">{album.label}</p>
+        <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${album.dot}`} />
+        <p className={`truncate font-medium ${isEmpty ? "text-zinc-500" : "text-zinc-100"}`}>
+          {album.label}
+        </p>
       </div>
       <p className="mt-0.5 text-sm text-zinc-500">
         {album.cards.length} photo{album.cards.length === 1 ? "" : "s"}
@@ -497,45 +550,76 @@ function Collage({ cards }: { cards: ScreenshotCardData[] }) {
   );
 }
 
-function AlbumDetail({
-  album,
-  selectedIds,
-  selectionMode,
-  isAnalyzing,
-  onBack,
-  onToggle,
-  onSelectAll,
-  onReanalyze,
-}: {
-  album: Album;
+type CardListProps = {
+  categories: UserCategory[];
   selectedIds: Set<string>;
   selectionMode: boolean;
+  onToggle: (id: string) => void;
+};
+
+function CardGrid({
+  cards,
+  categories,
+  selectedIds,
+  selectionMode,
+  onToggle,
+  dimmed = false,
+}: CardListProps & { cards: ScreenshotCardData[]; dimmed?: boolean }) {
+  return (
+    <div
+      className={`columns-2 gap-4 transition-opacity md:columns-3 lg:columns-4 ${
+        dimmed ? "opacity-50" : ""
+      }`}
+    >
+      {cards.map((card) => (
+        <ScreenshotCard
+          key={card.id}
+          screenshot={card}
+          categories={categories}
+          selected={selectedIds.has(card.id)}
+          selectionMode={selectionMode}
+          onToggleSelect={onToggle}
+        />
+      ))}
+    </div>
+  );
+}
+
+function AlbumDetail({
+  album,
+  isAnalyzing,
+  onBack,
+  onSelectAll,
+  onReanalyze,
+  ...cardProps
+}: CardListProps & {
+  album: Album;
   isAnalyzing: boolean;
   onBack: () => void;
-  onToggle: (id: string) => void;
   onSelectAll: (ids: string[], select: boolean) => void;
   onReanalyze: () => void;
 }) {
   const allSelected =
-    album.cards.length > 0 && album.cards.every((c) => selectedIds.has(c.id));
+    album.cards.length > 0 && album.cards.every((c) => cardProps.selectedIds.has(c.id));
 
   return (
     <>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={onBack}
             aria-label="Back to albums"
-            className="grid h-9 w-9 place-items-center rounded-lg border border-zinc-800 text-zinc-300 transition hover:border-zinc-600 hover:text-white"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-zinc-800 text-zinc-300 transition hover:border-zinc-600 hover:text-white"
           >
             <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
             </svg>
           </button>
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight text-zinc-100">
-              {album.label}
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-zinc-100">
+              <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${album.dot}`} />
+              <span className="truncate">{album.label}</span>
             </h2>
             <p className="text-sm text-zinc-500">
               {album.cards.length} photo{album.cards.length === 1 ? "" : "s"}
@@ -543,7 +627,7 @@ function AlbumDetail({
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => onSelectAll(album.cards.map((c) => c.id), !allSelected)}
@@ -551,29 +635,20 @@ function AlbumDetail({
           >
             {allSelected ? "Deselect all" : "Select all"}
           </button>
+          <DownloadZipLink albumKey={album.key} count={album.cards.length} />
           <button
             type="button"
             onClick={onReanalyze}
             disabled={isAnalyzing}
             className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 disabled:opacity-60"
           >
-            {isAnalyzing && !selectionMode && <Spinner />}
-            Re-analyze album
+            {isAnalyzing && !cardProps.selectionMode && <Spinner />}
+            Re-analyze
           </button>
         </div>
       </div>
 
-      <div className="columns-2 gap-4 md:columns-3 lg:columns-4">
-        {album.cards.map((card) => (
-          <ScreenshotCard
-            key={card.id}
-            screenshot={card}
-            selected={selectedIds.has(card.id)}
-            selectionMode={selectionMode}
-            onToggleSelect={onToggle}
-          />
-        ))}
-      </div>
+      <CardGrid {...cardProps} cards={album.cards} />
     </>
   );
 }
@@ -584,26 +659,21 @@ function SearchResults({
   error,
   albumLabel,
   results,
-  selectedIds,
-  selectionMode,
-  onToggle,
   onSelectAll,
   onClearAlbum,
-}: {
+  ...cardProps
+}: CardListProps & {
   query: string;
   loading: boolean;
   error: string | null;
   // Set when an album chip narrows the results.
   albumLabel: string | null;
   results: ScreenshotCardData[];
-  selectedIds: Set<string>;
-  selectionMode: boolean;
-  onToggle: (id: string) => void;
   onSelectAll: (ids: string[], select: boolean) => void;
   onClearAlbum: () => void;
 }) {
   const allSelected =
-    results.length > 0 && results.every((c) => selectedIds.has(c.id));
+    results.length > 0 && results.every((c) => cardProps.selectedIds.has(c.id));
 
   return (
     <>
@@ -656,21 +726,7 @@ function SearchResults({
           </p>
         </div>
       ) : (
-        <div
-          className={`columns-2 gap-4 transition-opacity md:columns-3 lg:columns-4 ${
-            loading ? "opacity-50" : ""
-          }`}
-        >
-          {results.map((card) => (
-            <ScreenshotCard
-              key={card.id}
-              screenshot={card}
-              selected={selectedIds.has(card.id)}
-              selectionMode={selectionMode}
-              onToggleSelect={onToggle}
-            />
-          ))}
-        </div>
+        <CardGrid {...cardProps} cards={results} dimmed={loading} />
       )}
     </>
   );

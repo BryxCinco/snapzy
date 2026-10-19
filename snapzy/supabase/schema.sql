@@ -1,6 +1,7 @@
 -- =============================================================================
 -- Snapzy — Phase 1 database schema
 -- Run this whole file once in: Supabase Dashboard → SQL Editor → New query → Run
+-- Fresh project: run this file, then supabase/migrations/002 → 005 in order.
 -- Safe to re-run: uses IF NOT EXISTS / DROP POLICY IF EXISTS where possible.
 -- =============================================================================
 

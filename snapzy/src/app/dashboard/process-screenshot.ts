@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { analyzeScreenshot } from "@/lib/ai/analyze-screenshot";
+import { fallbackCategory, getUserCategories } from "@/lib/categories-server";
 
 // Not a Server Action (no "use server"): only called from actions.ts, so it
 // can't be invoked directly from the browser.
@@ -24,14 +25,30 @@ export async function processScreenshot(
     .eq("id", screenshotId);
 
   try {
-    const analysis = await analyzeScreenshot(image, mediaType);
+    // Fetched per image so a category added mid-run is used right away.
+    const categories = await getUserCategories(supabase, userId);
+    const fallback = fallbackCategory(categories);
+    if (!fallback) throw new Error("No categories found for this user.");
+
+    const analysis = await analyzeScreenshot(
+      image,
+      mediaType,
+      categories.map((c) => ({ name: c.name, description: c.description })),
+      fallback.name,
+    );
+    const chosen =
+      categories.find((c) => c.name === analysis.category) ??
+      categories.find(
+        (c) => c.name.toLowerCase() === analysis.category.toLowerCase(),
+      ) ??
+      fallback;
 
     const { error: updateError } = await supabase
       .from("screenshots")
       .update({
         ocr_text: analysis.ocr_text,
         summary: analysis.summary,
-        category: analysis.category,
+        category_id: chosen.id,
         status: "done",
         processing_error: null,
       })

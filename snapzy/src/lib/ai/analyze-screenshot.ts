@@ -1,7 +1,6 @@
 import { google } from "@ai-sdk/google";
 import { APICallError, generateText, Output, RetryError } from "ai";
 import { z } from "zod";
-import { CATEGORIES } from "@/lib/categories";
 
 // Older Flash models (1.5, 2.5) are closed to new API keys; Google's error
 // response points new users to 3.8 Flash. Override with GEMINI_MODEL.
@@ -20,48 +19,70 @@ function shouldFallBack(err: unknown): boolean {
   );
 }
 
-const analysisSchema = z.object({
-  ocr_text: z
-    .string()
-    .describe("All readable text in the image, in reading order. Empty string if none."),
-  summary: z
-    .string()
-    .describe("One sentence describing what the screenshot shows."),
-  category: z.enum(CATEGORIES),
-  tags: z
-    .array(z.string())
-    .describe("2-3 short, lowercase topical tags, e.g. 'python', 'grocery'."),
-});
+export type CategoryOption = {
+  name: string;
+  description: string | null;
+};
 
-export type ScreenshotAnalysis = z.infer<typeof analysisSchema>;
+export type ScreenshotAnalysis = {
+  ocr_text: string;
+  summary: string;
+  // One of the names passed in `categories`.
+  category: string;
+  tags: string[];
+};
 
-const INSTRUCTIONS = `You organize a user's screenshots and pictures.
+function buildSchema(categoryNames: [string, ...string[]]) {
+  return z.object({
+    ocr_text: z
+      .string()
+      .describe("All readable text in the image, in reading order. Empty string if none."),
+    summary: z
+      .string()
+      .describe("One sentence describing what the image shows."),
+    category: z.enum(categoryNames),
+    tags: z
+      .array(z.string())
+      .describe("2-3 short, lowercase topical tags, e.g. 'python', 'grocery'."),
+  });
+}
+
+// The user's own category list goes into the prompt, so custom ones like
+// "Mobile Legends" or "Wifi" work without code changes.
+function buildInstructions(categories: CategoryOption[], fallbackName: string) {
+  const list = categories
+    .map((c) => (c.description ? `  - ${c.name}: ${c.description}` : `  - ${c.name}`))
+    .join("\n");
+
+  return `You organize a user's screenshots and pictures.
 Look at the image and return:
 - ocr_text: every piece of readable text, transcribed faithfully. Do not summarize it.
 - summary: exactly one plain sentence about what the image shows.
-- category: the single best fit, judged by the main subject of the image.
-  Person = one or more people are the main subject (portraits, selfies, group photos).
-  Place = buildings, landmarks, rooms, streets, landscapes, nature, maps.
-  Food = dishes, drinks, ingredients, restaurant menus.
-  Animal = pets, wildlife, any animal as the main subject.
-  Product = items for sale, shopping pages, gadgets, clothes, product photos.
-  Logo = a brand mark, app icon, emblem or wordmark is the main subject.
-  QR = a QR code or barcode is the main subject.
-  Receipt = receipts, invoices, bills, payment or order confirmations.
-  Document = articles, notes, forms, slides, emails, IDs, other text-heavy pages.
-  Chat = messaging apps, social media posts, comments, DMs.
-  Code = source code, terminals, IDEs, error messages, stack traces.
-  Meme = jokes and humorous images with captions.
-  Other = anything that fits none of the above.
-  Prefer the most specific category: a receipt is Receipt, not Document;
-  a chat screenshot is Chat, not Document. Choose QR only when the code dominates the image.
+- category: choose the best category from this list, using the exact name:
+${list}
+  Judge by the main subject of the image and prefer the most specific category.
+  Categories the user created themselves (often games, hobbies, topics) take
+  priority over general ones when they clearly match.
+  If no category fits, choose "${fallbackName}".
 - tags: 2 or 3 short lowercase tags that would help find this later.`;
+}
 
 export async function analyzeScreenshot(
   image: Uint8Array,
   mediaType: string,
+  categories: CategoryOption[],
+  fallbackName: string,
 ): Promise<ScreenshotAnalysis> {
-  const output = await generateWithFallback(image, mediaType);
+  const names = [...new Set([...categories.map((c) => c.name), fallbackName])] as [
+    string,
+    ...string[],
+  ];
+  const output = await generateWithFallback(
+    image,
+    mediaType,
+    buildSchema(names),
+    buildInstructions(categories, fallbackName),
+  );
 
   const tags = [
     ...new Set(
@@ -79,14 +100,19 @@ export async function analyzeScreenshot(
   };
 }
 
-async function generateWithFallback(image: Uint8Array, mediaType: string) {
+async function generateWithFallback(
+  image: Uint8Array,
+  mediaType: string,
+  schema: ReturnType<typeof buildSchema>,
+  instructions: string,
+) {
   let lastError: unknown;
   for (const modelId of MODEL_IDS) {
     try {
       const { output } = await generateText({
         model: google(modelId),
-        instructions: INSTRUCTIONS,
-        output: Output.object({ schema: analysisSchema }),
+        instructions,
+        output: Output.object({ schema }),
         messages: [
           {
             role: "user",

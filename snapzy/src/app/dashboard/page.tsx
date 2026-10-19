@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { logout } from "@/app/(auth)/actions";
 import type { ScreenshotCardData } from "@/components/screenshot-card";
 import { type ProcessingStatus, STUCK_AFTER_MS } from "@/lib/categories";
+import { getUserCategories } from "@/lib/categories-server";
 import { createClient } from "@/lib/supabase/server";
 import { GalleryView } from "./gallery-view";
 import { SearchBar, SearchBarFallback } from "./search-bar";
@@ -19,7 +20,7 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
 export default function DashboardPage() {
   return (
     <div className="flex flex-1 flex-col bg-zinc-950 text-zinc-100">
-      {/* Fixed h-16 so the sticky category tabs can sit right under it (top-16). */}
+      {/* Fixed h-16 so the sticky album bar can sit right under it (top-16). */}
       <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-zinc-800 bg-zinc-950/90 px-4 backdrop-blur sm:gap-6 sm:px-6">
         <div className="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-linear-to-br from-violet-500 to-cyan-400 text-xs font-bold text-zinc-950">
@@ -103,14 +104,32 @@ async function Gallery() {
   await connection();
 
   const supabase = await createClient();
-  // RLS limits this to the logged-in user's rows.
-  const { data: rows, error } = await supabase
-    .from("screenshots")
-    .select(
-      "id, storage_path, original_filename, created_at, summary, ocr_text, category, status, processing_started_at, screenshot_tags(tags(name))",
-    )
-    .eq("is_archived", false)
-    .order("created_at", { ascending: false });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  // RLS limits both queries to the logged-in user's rows.
+  const [{ data: rows, error }, categories] = await Promise.all([
+    supabase
+      .from("screenshots")
+      .select(
+        "id, storage_path, original_filename, created_at, summary, ocr_text, category_id, status, processing_started_at, screenshot_tags(tags(name))",
+      )
+      .eq("is_archived", false)
+      .order("created_at", { ascending: false }),
+    getUserCategories(supabase, user.id).catch(() => null),
+  ]);
+
+  if (!categories) {
+    return (
+      <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+        Couldn&apos;t load your categories. Run{" "}
+        <code className="font-mono">supabase/migrations/005_custom_categories.sql</code>{" "}
+        in the Supabase SQL Editor, then refresh.
+      </p>
+    );
+  }
 
   if (error) {
     return (
@@ -121,7 +140,7 @@ async function Gallery() {
   }
 
   if (!rows || rows.length === 0) {
-    return <GalleryView cards={[]} />;
+    return <GalleryView cards={[]} categories={categories} />;
   }
 
   // The bucket is private, so sign every path in one round trip.
@@ -155,13 +174,13 @@ async function Gallery() {
           now - startedAt > STUCK_AFTER_MS,
         summary: r.summary,
         ocrText: r.ocr_text ?? null,
-        category: r.category ?? null,
+        categoryId: r.category_id ?? null,
         tags: extractTagNames(r.screenshot_tags),
       },
     ];
   });
 
-  return <GalleryView cards={cards} />;
+  return <GalleryView cards={cards} categories={categories} />;
 }
 
 // Only called after `await connection()`, so this is per-request time, not a

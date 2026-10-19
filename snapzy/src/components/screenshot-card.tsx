@@ -1,13 +1,52 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { deleteScreenshot, retryProcessing } from "@/app/dashboard/actions";
+import { updateScreenshotCategory } from "@/app/dashboard/category-actions";
 import { toast } from "@/components/toast";
-import { type Category, isCategory, type ProcessingStatus } from "@/lib/categories";
+import {
+  colorStyles,
+  type ProcessingStatus,
+  type UserCategory,
+} from "@/lib/categories";
+
+export type ScreenshotCardData = {
+  id: string;
+  url: string;
+  filename: string;
+  createdAt: string;
+  status: ProcessingStatus;
+  // Pending/processing for too long — the background job likely died.
+  stuck: boolean;
+  summary: string | null;
+  ocrText: string | null;
+  // null = not categorized yet (still analyzing, or analysis failed).
+  categoryId: string | null;
+  tags: string[];
+};
+
+type Props = {
+  screenshot: ScreenshotCardData;
+  categories: UserCategory[];
+  selected: boolean;
+  // True while anything is selected: checkboxes stay visible and clicking
+  // the image toggles selection instead of doing nothing.
+  selectionMode: boolean;
+  onToggleSelect: (id: string) => void;
+};
+
+const dateFormat = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
 
 // Hover-only controls stay visible on touch screens, which have no hover.
 const HOVER_REVEAL =
   "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+
+const ICON_BUTTON =
+  "grid h-8 w-8 place-items-center rounded-lg bg-zinc-950/70 text-zinc-300 ring-1 ring-white/10 backdrop-blur transition hover:text-white";
 
 async function copyToClipboard(text: string) {
   if (navigator.clipboard && window.isSecureContext) {
@@ -28,86 +67,55 @@ async function copyToClipboard(text: string) {
   if (!ok) throw new Error("Copy failed");
 }
 
-export type ScreenshotCardData = {
-  id: string;
-  url: string;
-  filename: string;
-  createdAt: string;
-  status: ProcessingStatus;
-  // Pending/processing for too long — the background job likely died.
-  stuck: boolean;
-  summary: string | null;
-  ocrText: string | null;
-  // May still hold a value from the old category list until re-analyzed.
-  category: string | null;
-  tags: string[];
-};
-
-type Props = {
-  screenshot: ScreenshotCardData;
-  selected: boolean;
-  // True while anything is selected: checkboxes stay visible and clicking
-  // the image toggles selection instead of doing nothing.
-  selectionMode: boolean;
-  onToggleSelect: (id: string) => void;
-};
-
-const dateFormat = new Intl.DateTimeFormat("en", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
-
-export const categoryStyles: Record<Category, string> = {
-  Person: "bg-pink-500/15 text-pink-300 ring-pink-500/30",
-  Place: "bg-amber-500/15 text-amber-300 ring-amber-500/30",
-  Food: "bg-orange-500/15 text-orange-300 ring-orange-500/30",
-  Animal: "bg-lime-500/15 text-lime-300 ring-lime-500/30",
-  Product: "bg-fuchsia-500/15 text-fuchsia-300 ring-fuchsia-500/30",
-  Logo: "bg-sky-500/15 text-sky-300 ring-sky-500/30",
-  QR: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30",
-  Receipt: "bg-teal-500/15 text-teal-300 ring-teal-500/30",
-  Document: "bg-violet-500/15 text-violet-300 ring-violet-500/30",
-  Chat: "bg-blue-500/15 text-blue-300 ring-blue-500/30",
-  Code: "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30",
-  Meme: "bg-yellow-500/15 text-yellow-300 ring-yellow-500/30",
-  Other: "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30",
-};
-
-export const categoryLabels: Record<Category, string> = {
-  Person: "People",
-  Place: "Places",
-  Food: "Food",
-  Animal: "Animals",
-  Product: "Products",
-  Logo: "Logos",
-  QR: "QR codes",
-  Receipt: "Receipts",
-  Document: "Documents",
-  Chat: "Chats & social",
-  Code: "Code",
-  Meme: "Memes",
-  Other: "Other",
-};
+// Supabase signed URLs accept `download=<name>`, which makes Storage send
+// Content-Disposition: attachment — no CORS fetch or blob needed.
+function downloadUrl(signedUrl: string, filename: string) {
+  const sep = signedUrl.includes("?") ? "&" : "?";
+  return `${signedUrl}${sep}download=${encodeURIComponent(filename)}`;
+}
 
 export function ScreenshotCard({
   screenshot,
+  categories,
   selected,
   selectionMode,
   onToggleSelect,
 }: Props) {
   const [isDeleting, startDelete] = useTransition();
   const [isRetrying, startRetry] = useTransition();
+  const [isMoving, startMove] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
 
+  const category = categories.find((c) => c.id === screenshot.categoryId) ?? null;
   const processing =
     !screenshot.stuck &&
     (screenshot.status === "pending" || screenshot.status === "processing");
-  const isLegacyCategory =
-    screenshot.category !== null && !isCategory(screenshot.category);
   const canRetry =
     screenshot.status === "failed" ||
     (screenshot.stuck && screenshot.status !== "done");
+
+  // Close the "Move to" menu on outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onPointer(e: PointerEvent) {
+      const target = e.target as Node;
+      // The toggle button handles its own clicks.
+      if (menuRef.current?.contains(target) || menuButtonRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   function handleDelete() {
     if (!window.confirm("Are you sure you want to delete this screenshot?")) return;
@@ -128,6 +136,17 @@ export function ScreenshotCard({
     }
   }
 
+  function handleMove(target: UserCategory) {
+    setMenuOpen(false);
+    if (target.id === screenshot.categoryId) return;
+    setError(null);
+    startMove(async () => {
+      const result = await updateScreenshotCategory(screenshot.id, target.id);
+      if (result.ok) toast(`Moved to ${target.name}`);
+      else setError(result.error);
+    });
+  }
+
   function handleRetry() {
     setError(null);
     startRetry(async () => {
@@ -137,15 +156,20 @@ export function ScreenshotCard({
   }
 
   return (
+    // No overflow-hidden here: the "Move to" menu has to escape the card.
     <figure
-      className={`group mb-4 break-inside-avoid overflow-hidden rounded-xl border bg-zinc-900 transition ${
+      className={`group relative mb-4 break-inside-avoid rounded-xl border bg-zinc-900 transition ${
         selected
           ? "border-violet-500 ring-2 ring-violet-500/40"
           : "border-zinc-800"
-      } ${isDeleting ? "pointer-events-none scale-95 opacity-40" : ""}`}
+      } ${isDeleting ? "pointer-events-none scale-95 opacity-40" : ""} ${
+        menuOpen ? "z-30" : ""
+      }`}
     >
       <div
-        className={`relative overflow-hidden ${selectionMode ? "cursor-pointer" : ""}`}
+        className={`relative overflow-hidden rounded-t-xl ${
+          category || screenshot.summary || canRetry || error ? "" : "rounded-b-xl"
+        } ${selectionMode ? "cursor-pointer" : ""}`}
         onClick={selectionMode ? () => onToggleSelect(screenshot.id) : undefined}
       >
         {/* Plain <img>: signed URLs change on every render, so next/image's
@@ -157,7 +181,7 @@ export function ScreenshotCard({
           loading="lazy"
           decoding="async"
           className={`block h-auto w-full transition duration-300 ease-out group-hover:scale-[1.03] ${
-            processing ? "opacity-50" : ""
+            processing || isMoving ? "opacity-50" : ""
           }`}
         />
 
@@ -194,89 +218,120 @@ export function ScreenshotCard({
               : "bg-zinc-950/70 text-transparent ring-white/20 hover:ring-white/50"
           } ${selected || selectionMode ? "opacity-100" : HOVER_REVEAL}`}
         >
-          <svg
-            aria-hidden
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={3}
-            className="h-4 w-4"
-          >
+          <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="h-4 w-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 5 5 9-10" />
           </svg>
         </button>
 
-        <div className={`absolute top-2 right-2 flex gap-1.5 transition ${HOVER_REVEAL}`}>
-        {screenshot.ocrText && (
+        <div
+          className={`absolute top-2 right-2 flex gap-1 transition ${
+            menuOpen ? "opacity-100" : HOVER_REVEAL
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {screenshot.ocrText && (
+            <button
+              type="button"
+              onClick={handleCopy}
+              aria-label={`Copy text from ${screenshot.filename}`}
+              title="Copy text"
+              className={`${ICON_BUTTON} hover:bg-violet-600`}
+            >
+              <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+                <rect x="9" y="9" width="11" height="11" rx="2" />
+                <path strokeLinecap="round" d="M5 15V6a2 2 0 0 1 2-2h8" />
+              </svg>
+            </button>
+          )}
+          <a
+            href={downloadUrl(screenshot.url, screenshot.filename)}
+            download={screenshot.filename}
+            aria-label={`Download ${screenshot.filename}`}
+            title="Download image"
+            className={`${ICON_BUTTON} hover:bg-sky-600`}
+          >
+            <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" />
+            </svg>
+          </a>
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCopy();
-            }}
-            aria-label={`Copy text from ${screenshot.filename}`}
-            title="Copy text"
-            className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-950/70 text-zinc-300 ring-1 ring-white/10 backdrop-blur transition hover:bg-violet-600 hover:text-white"
+            ref={menuButtonRef}
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            aria-label={`Move ${screenshot.filename} to another album`}
+            title="Move to…"
+            className={`${ICON_BUTTON} hover:bg-emerald-600 ${menuOpen ? "bg-emerald-600 text-white" : ""}`}
           >
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.8}
-              className="h-4 w-4"
-            >
-              <rect x="9" y="9" width="11" height="11" rx="2" />
-              <path strokeLinecap="round" d="M5 15V6a2 2 0 0 1 2-2h8" />
+            <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm9 3v6m0 0-2.5-2.5M12 16l2.5-2.5" />
             </svg>
           </button>
-        )}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleDelete();
-          }}
-          disabled={isDeleting}
-          aria-label={`Delete ${screenshot.filename}`}
-          title="Delete"
-          className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-950/70 text-zinc-300 ring-1 ring-white/10 backdrop-blur transition hover:bg-red-500/90 hover:text-white"
-        >
-          <svg
-            aria-hidden
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.8}
-            className="h-4 w-4"
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={isDeleting}
+            aria-label={`Delete ${screenshot.filename}`}
+            title="Delete"
+            className={`${ICON_BUTTON} hover:bg-red-500/90`}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M4 7h16M10 11v6m4-6v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
-            />
-          </svg>
-        </button>
+            <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 7h16M10 11v6m4-6v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
+              />
+            </svg>
+          </button>
         </div>
       </div>
 
-      {(screenshot.category || screenshot.summary || canRetry || error) && (
+      {menuOpen && (
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-label="Move to album"
+          className="absolute top-12 right-2 z-30 max-h-72 w-52 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 p-1 shadow-2xl shadow-black/60"
+        >
+          <p className="px-2.5 pt-1.5 pb-1 text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
+            Move to
+          </p>
+          {categories.map((c) => {
+            const current = c.id === screenshot.categoryId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={current}
+                onClick={() => handleMove(c)}
+                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition ${
+                  current ? "bg-zinc-800 text-zinc-100" : "text-zinc-300 hover:bg-zinc-800"
+                }`}
+              >
+                <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${colorStyles[c.color].dot}`} />
+                <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                {current && (
+                  <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3.5 w-3.5 text-violet-400">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 5 5 9-10" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {(category || screenshot.summary || canRetry || error) && (
         <figcaption className="space-y-2 p-3">
-          {screenshot.category &&
-            (isCategory(screenshot.category) ? (
-              <span
-                className={`inline-block rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${categoryStyles[screenshot.category]}`}
-              >
-                {categoryLabels[screenshot.category]}
-              </span>
-            ) : (
-              <span
-                title="From the old category list. Re-analyze to update it."
-                className="inline-block rounded-full px-2 py-0.5 text-[11px] font-medium border border-dashed border-zinc-700 text-zinc-500"
-              >
-                {screenshot.category} · old
-              </span>
-            ))}
+          {category && (
+            <span
+              className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${colorStyles[category.color].badge}`}
+            >
+              {category.name}
+            </span>
+          )}
           {screenshot.summary && (
             <p className="line-clamp-3 text-sm text-zinc-300">
               {screenshot.summary}
@@ -291,14 +346,10 @@ export function ScreenshotCard({
               ))}
             </ul>
           )}
-          {(canRetry || isLegacyCategory) && !processing && (
+          {canRetry && !processing && (
             <div className="flex items-center justify-between gap-2">
-              <p className={`text-xs ${canRetry ? "text-red-300" : "text-zinc-500"}`}>
-                {canRetry
-                  ? screenshot.stuck
-                    ? "Analysis timed out."
-                    : "AI analysis failed."
-                  : "Old category."}
+              <p className="text-xs text-red-300">
+                {screenshot.stuck ? "Analysis timed out." : "AI analysis failed."}
               </p>
               <button
                 type="button"

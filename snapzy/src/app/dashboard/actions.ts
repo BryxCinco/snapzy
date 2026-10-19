@@ -3,7 +3,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { isCategory, STUCK_AFTER_MS } from "@/lib/categories";
+import { STUCK_AFTER_MS } from "@/lib/categories";
 import { createClient } from "@/lib/supabase/server";
 import { isAllowedImageType, MAX_UPLOAD_BYTES } from "@/lib/uploads";
 import { processScreenshot } from "./process-screenshot";
@@ -114,13 +114,13 @@ type QueueRow = {
   storage_path: string;
   mime_type: string | null;
   status: string;
-  category: string | null;
+  category_id: string | null;
   processing_started_at: string | null;
 };
 
-// Failed items, items stuck mid-run, and items still carrying a category
-// from the old category list. Fresh pending/processing rows are skipped:
-// a background job is already working on them.
+// Failed items, items stuck mid-run, and finished items without a category
+// (e.g. analyzed before categories existed). Fresh pending/processing rows
+// are skipped: a background job is already working on them.
 function needsAnalysis(row: QueueRow, now: number) {
   if (row.status === "failed") return true;
   if (row.status === "pending" || row.status === "processing") {
@@ -129,12 +129,12 @@ function needsAnalysis(row: QueueRow, now: number) {
       : 0;
     return now - started > STUCK_AFTER_MS;
   }
-  return row.category !== null && !isCategory(row.category);
+  return row.category_id === null;
 }
 
 /**
  * Runs AI analysis for several screenshots in the background.
- * By default only failed, stuck or old-category items are queued;
+ * By default only failed, stuck or uncategorized items are queued;
  * pass `includeDone` to re-analyze everything (e.g. "Re-analyze all").
  */
 export async function analyzeMultipleScreenshots(
@@ -161,7 +161,7 @@ export async function analyzeMultipleScreenshots(
   // RLS drops any ids that belong to someone else.
   const { data: rows, error } = await supabase
     .from("screenshots")
-    .select("id, storage_path, mime_type, status, category, processing_started_at")
+    .select("id, storage_path, mime_type, status, category_id, processing_started_at")
     .in("id", uniqueIds);
   if (error) {
     return { ok: false, error: error.message };
