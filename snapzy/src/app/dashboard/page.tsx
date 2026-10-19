@@ -118,16 +118,24 @@ async function Gallery() {
       )
       .eq("is_archived", false)
       .order("created_at", { ascending: false }),
-    getUserCategories(supabase, user.id).catch(() => null),
+    getUserCategories(supabase, user.id).catch((err: { message?: string }) => ({
+      error: err?.message ?? "Unknown error",
+    })),
   ]);
 
-  if (!categories) {
+  if ("error" in categories) {
     return (
-      <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-        Couldn&apos;t load your categories. Run{" "}
-        <code className="font-mono">supabase/migrations/005_custom_categories.sql</code>{" "}
-        in the Supabase SQL Editor, then refresh.
-      </p>
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+        <p>
+          Couldn&apos;t load your categories:{" "}
+          <span className="font-mono">{categories.error}</span>
+        </p>
+        <p className="mt-1 text-amber-200/70">
+          Make sure migrations 005 and 006 in{" "}
+          <code className="font-mono">supabase/migrations/</code> have been run in
+          the Supabase SQL Editor, then refresh.
+        </p>
+      </div>
     );
   }
 
