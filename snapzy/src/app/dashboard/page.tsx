@@ -6,6 +6,7 @@ import { logout } from "@/app/(auth)/actions";
 import type { ScreenshotCardData } from "@/components/screenshot-card";
 import { type ProcessingStatus, STUCK_AFTER_MS } from "@/lib/categories";
 import { getUserCategories } from "@/lib/categories-server";
+import { parseMetadata } from "@/lib/metadata";
 import { createClient } from "@/lib/supabase/server";
 import { GalleryView } from "./gallery-view";
 import { SearchBar, SearchBarFallback } from "./search-bar";
@@ -100,6 +101,39 @@ async function CurrentUser() {
   );
 }
 
+const SCREENSHOT_COLUMNS =
+  "id, storage_path, original_filename, created_at, summary, ocr_text, category_id, status, processing_started_at, screenshot_tags(tags(name))";
+
+async function loadScreenshots(supabase: Awaited<ReturnType<typeof createClient>>) {
+  const query = (columns: string) =>
+    supabase
+      .from("screenshots")
+      .select(columns)
+      .eq("is_archived", false)
+      .order("created_at", { ascending: false })
+      .overrideTypes<ScreenshotRow[], { merge: false }>();
+
+  const result = await query(`${SCREENSHOT_COLUMNS}, metadata`);
+  // 42703 = undefined column: migration 007 (metadata) not applied yet.
+  // The gallery still works, just without smart cards.
+  if (result.error?.code === "42703") return query(SCREENSHOT_COLUMNS);
+  return result;
+}
+
+type ScreenshotRow = {
+  id: string;
+  storage_path: string;
+  original_filename: string | null;
+  created_at: string;
+  summary: string | null;
+  ocr_text: string | null;
+  category_id: string | null;
+  status: string | null;
+  processing_started_at: string | null;
+  metadata?: unknown;
+  screenshot_tags: unknown;
+};
+
 async function Gallery() {
   await connection();
 
@@ -111,13 +145,7 @@ async function Gallery() {
 
   // RLS limits both queries to the logged-in user's rows.
   const [{ data: rows, error }, categories] = await Promise.all([
-    supabase
-      .from("screenshots")
-      .select(
-        "id, storage_path, original_filename, created_at, summary, ocr_text, category_id, status, processing_started_at, screenshot_tags(tags(name))",
-      )
-      .eq("is_archived", false)
-      .order("created_at", { ascending: false }),
+    loadScreenshots(supabase),
     getUserCategories(supabase, user.id).catch((err: { message?: string }) => ({
       error: err?.message ?? "Unknown error",
     })),
@@ -183,6 +211,7 @@ async function Gallery() {
         summary: r.summary,
         ocrText: r.ocr_text ?? null,
         categoryId: r.category_id ?? null,
+        metadata: parseMetadata(r.metadata),
         tags: extractTagNames(r.screenshot_tags),
       },
     ];

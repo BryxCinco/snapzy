@@ -1,6 +1,7 @@
 import { google } from "@ai-sdk/google";
 import { APICallError, generateText, Output, RetryError } from "ai";
 import { z } from "zod";
+import { parseMetadata, type ScreenshotMetadata } from "@/lib/metadata";
 
 // Older Flash models (1.5, 2.5) are closed to new API keys; Google's error
 // response points new users to 3.8 Flash. Override with GEMINI_MODEL.
@@ -30,10 +31,53 @@ export type ScreenshotAnalysis = {
   // One of the names passed in `categories`.
   category: string;
   tags: string[];
+  // Structured data found in the image; null when there's none.
+  metadata: ScreenshotMetadata | null;
 };
+
+const text = (description: string) => z.string().nullable().describe(description);
+
+// Every field is nullable: the model fills only what is clearly visible.
+const extractedSchema = z.object({
+  wifi: z
+    .object({
+      ssid: z.string().describe("Network name exactly as shown."),
+      password: text("Password exactly as shown, case-sensitive."),
+      security: text("WPA, WPA2, WPA3, WEP or open, if shown."),
+    })
+    .nullable()
+    .describe("Only when the image shows a WiFi network name, e.g. a router sticker, a WiFi QR code, or a sign."),
+  flight: z
+    .object({
+      flight_number: text("e.g. PR 102, 5J 560."),
+      airline: text("Airline name."),
+      passenger: text("Passenger name."),
+      from: text("Origin airport code or city."),
+      to: text("Destination airport code or city."),
+      date: text("Departure date as shown."),
+      departure_time: text("Departure or boarding time as shown."),
+      gate: text("Gate."),
+      seat: text("Seat."),
+      booking_reference: text("Booking reference / PNR."),
+    })
+    .nullable()
+    .describe("Only for boarding passes, flight bookings or itineraries."),
+  payment: z
+    .object({
+      provider: text("e.g. GCash, Maya, BDO, the store name."),
+      amount: text("Total amount paid, digits as shown, without the currency sign."),
+      currency: text("ISO code, e.g. PHP, USD."),
+      reference_number: text("Reference / transaction / receipt number."),
+      recipient: text("Who was paid."),
+      date: text("Transaction date and time as shown."),
+    })
+    .nullable()
+    .describe("Only for receipts, payment confirmations, GCash/Maya/bank transfers."),
+});
 
 function buildSchema(categoryNames: [string, ...string[]]) {
   return z.object({
+    extracted: extractedSchema,
     ocr_text: z
       .string()
       .describe("All readable text in the image, in reading order. Empty string if none."),
@@ -64,7 +108,12 @@ ${list}
   Categories the user created themselves (often games, hobbies, topics) take
   priority over general ones when they clearly match.
   If no category fits, choose "${fallbackName}".
-- tags: 2 or 3 short lowercase tags that would help find this later.`;
+- tags: 2 or 3 short lowercase tags that would help find this later.
+- extracted: structured details, only when they are clearly visible:
+  wifi (network name, password), flight (boarding pass / booking details),
+  payment (amount and reference number from receipts, GCash, Maya or bank transfers).
+  Copy values exactly as shown. Never guess or invent a value: use null for
+  anything not visible, and null for a whole section that doesn't apply.`;
 }
 
 export async function analyzeScreenshot(
@@ -97,6 +146,7 @@ export async function analyzeScreenshot(
     summary: output.summary.trim(),
     category: output.category,
     tags,
+    metadata: parseMetadata(output.extracted),
   };
 }
 

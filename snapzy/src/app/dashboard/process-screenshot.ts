@@ -43,16 +43,25 @@ export async function processScreenshot(
       ) ??
       fallback;
 
-    const { error: updateError } = await supabase
+    const result = {
+      ocr_text: analysis.ocr_text,
+      summary: analysis.summary,
+      category_id: chosen.id,
+      status: "done",
+      processing_error: null,
+    };
+    let { error: updateError } = await supabase
       .from("screenshots")
-      .update({
-        ocr_text: analysis.ocr_text,
-        summary: analysis.summary,
-        category_id: chosen.id,
-        status: "done",
-        processing_error: null,
-      })
+      .update({ ...result, metadata: analysis.metadata })
       .eq("id", screenshotId);
+    // PGRST204 = unknown column: migration 007 (metadata) not applied yet.
+    // Save everything else rather than failing the whole analysis.
+    if (updateError?.code === "PGRST204") {
+      ({ error: updateError } = await supabase
+        .from("screenshots")
+        .update(result)
+        .eq("id", screenshotId));
+    }
     if (updateError) throw updateError;
 
     await saveTags(supabase, screenshotId, userId, analysis.tags);

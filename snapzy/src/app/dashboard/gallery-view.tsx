@@ -1,12 +1,13 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   ScreenshotCard,
   type ScreenshotCardData,
   Spinner,
 } from "@/components/screenshot-card";
+import { ScreenshotModal } from "@/components/screenshot-modal";
 import { Toaster } from "@/components/toast";
 import { colorStyles, type UserCategory } from "@/lib/categories";
 import { analyzeMultipleScreenshots, searchScreenshots } from "./actions";
@@ -65,6 +66,23 @@ function buildAlbums(cards: ScreenshotCardData[], categories: UserCategory[]): A
     albums.push({ key: "unsorted", label: "Unsorted", dot: "bg-zinc-600", cards: unsorted });
   }
   return albums;
+}
+
+// Up to 4 photos sharing tags (weighted higher) or the category.
+function relatedTo(card: ScreenshotCardData, cards: ScreenshotCardData[]) {
+  const tags = new Set(card.tags);
+  return cards
+    .filter((c) => c.id !== card.id)
+    .map((c) => ({
+      card: c,
+      score:
+        c.tags.filter((t) => tags.has(t)).length * 2 +
+        (card.categoryId && c.categoryId === card.categoryId ? 1 : 0),
+    }))
+    .filter((r) => r.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .map((r) => r.card);
 }
 
 type SearchState = {
@@ -207,17 +225,69 @@ export function GalleryView({
     if (ok) analyze(list.map((c) => c.id), true);
   }
 
+  // --- Detail modal (?photo=<id>) ---------------------------------------
+  const openPhotoId = searchParams.get("photo");
+  const openPhoto = openPhotoId ? (byId.get(openPhotoId) ?? null) : null;
+  // True when we pushed the ?photo= entry ourselves, so closing can just go
+  // Back; false when the page was opened directly on a photo link.
+  const pushedPhoto = useRef(false);
+
+  function setPhotoParam(id: string | null, mode: "push" | "replace") {
+    const params = new URLSearchParams(window.location.search);
+    if (id) params.set("photo", id);
+    else params.delete("photo");
+    const qs = params.toString();
+    const url = qs ? `?${qs}` : window.location.pathname;
+    if (mode === "push") window.history.pushState(null, "", url);
+    else window.history.replaceState(null, "", url);
+  }
+
+  function showPhoto(id: string) {
+    pushedPhoto.current = true;
+    setPhotoParam(id, "push");
+  }
+
+  function closePhoto() {
+    if (pushedPhoto.current) {
+      pushedPhoto.current = false;
+      window.history.back();
+    } else {
+      setPhotoParam(null, "replace");
+    }
+  }
+
+  // ←/→ in the modal walk through whatever list is on screen.
+  const visibleList = searching
+    ? openKey && openKey !== "all"
+      ? (openAlbum?.cards ?? [])
+      : matched
+    : (openAlbum?.cards ?? cards);
+  const index = openPhoto ? visibleList.findIndex((c) => c.id === openPhoto.id) : -1;
+  const prevId = index > 0 ? visibleList[index - 1].id : null;
+  const nextId =
+    index >= 0 && index < visibleList.length - 1 ? visibleList[index + 1].id : null;
+
   const cardProps = {
     categories,
     selectedIds,
     selectionMode,
     onToggle: toggle,
+    onOpen: showPhoto,
   };
 
   return (
     <>
       <Toaster />
       <ProcessingPoller active={cards.some(isProcessing)} />
+      <ScreenshotModal
+        screenshot={openPhoto}
+        categories={categories}
+        related={openPhoto ? relatedTo(openPhoto, cards) : []}
+        onClose={closePhoto}
+        onNavigate={(id) => setPhotoParam(id, "replace")}
+        prevId={prevId}
+        nextId={nextId}
+      />
 
       <AlbumSwitcher
         albums={albums}
@@ -555,6 +625,7 @@ type CardListProps = {
   selectedIds: Set<string>;
   selectionMode: boolean;
   onToggle: (id: string) => void;
+  onOpen: (id: string) => void;
 };
 
 function CardGrid({
@@ -563,6 +634,7 @@ function CardGrid({
   selectedIds,
   selectionMode,
   onToggle,
+  onOpen,
   dimmed = false,
 }: CardListProps & { cards: ScreenshotCardData[]; dimmed?: boolean }) {
   return (
@@ -579,6 +651,7 @@ function CardGrid({
           selected={selectedIds.has(card.id)}
           selectionMode={selectionMode}
           onToggleSelect={onToggle}
+          onOpen={onOpen}
         />
       ))}
     </div>

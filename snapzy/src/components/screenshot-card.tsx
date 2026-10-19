@@ -4,11 +4,13 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { deleteScreenshot, retryProcessing } from "@/app/dashboard/actions";
 import { updateScreenshotCategory } from "@/app/dashboard/category-actions";
 import { toast } from "@/components/toast";
+import { copyToClipboard, downloadUrl } from "@/lib/clipboard";
 import {
   colorStyles,
   type ProcessingStatus,
   type UserCategory,
 } from "@/lib/categories";
+import type { ScreenshotMetadata } from "@/lib/metadata";
 
 export type ScreenshotCardData = {
   id: string;
@@ -22,6 +24,8 @@ export type ScreenshotCardData = {
   ocrText: string | null;
   // null = not categorized yet (still analyzing, or analysis failed).
   categoryId: string | null;
+  // Structured data the AI found (WiFi, flight, payment), if any.
+  metadata: ScreenshotMetadata | null;
   tags: string[];
 };
 
@@ -33,6 +37,8 @@ type Props = {
   // the image toggles selection instead of doing nothing.
   selectionMode: boolean;
   onToggleSelect: (id: string) => void;
+  // Opens the detail modal (ignored while selecting).
+  onOpen: (id: string) => void;
 };
 
 const dateFormat = new Intl.DateTimeFormat("en", {
@@ -48,38 +54,13 @@ const HOVER_REVEAL =
 const ICON_BUTTON =
   "grid h-8 w-8 place-items-center rounded-lg bg-zinc-950/70 text-zinc-300 ring-1 ring-white/10 backdrop-blur transition hover:text-white";
 
-async function copyToClipboard(text: string) {
-  if (navigator.clipboard && window.isSecureContext) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  // The Clipboard API needs HTTPS or localhost; opening the dev server from a
-  // phone over the LAN (http://192.168…) lands here.
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.setAttribute("readonly", "");
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const ok = document.execCommand("copy");
-  textarea.remove();
-  if (!ok) throw new Error("Copy failed");
-}
-
-// Supabase signed URLs accept `download=<name>`, which makes Storage send
-// Content-Disposition: attachment — no CORS fetch or blob needed.
-function downloadUrl(signedUrl: string, filename: string) {
-  const sep = signedUrl.includes("?") ? "&" : "?";
-  return `${signedUrl}${sep}download=${encodeURIComponent(filename)}`;
-}
-
 export function ScreenshotCard({
   screenshot,
   categories,
   selected,
   selectionMode,
   onToggleSelect,
+  onOpen,
 }: Props) {
   const [isDeleting, startDelete] = useTransition();
   const [isRetrying, startRetry] = useTransition();
@@ -90,6 +71,11 @@ export function ScreenshotCard({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
   const category = categories.find((c) => c.id === screenshot.categoryId) ?? null;
+  const smartLabels = [
+    screenshot.metadata?.wifi && "WiFi",
+    screenshot.metadata?.flight && "Flight",
+    screenshot.metadata?.payment && "Payment",
+  ].filter((label): label is string => Boolean(label));
   const processing =
     !screenshot.stuck &&
     (screenshot.status === "pending" || screenshot.status === "processing");
@@ -169,8 +155,10 @@ export function ScreenshotCard({
       <div
         className={`relative overflow-hidden rounded-t-xl ${
           category || screenshot.summary || canRetry || error ? "" : "rounded-b-xl"
-        } ${selectionMode ? "cursor-pointer" : ""}`}
-        onClick={selectionMode ? () => onToggleSelect(screenshot.id) : undefined}
+        } cursor-pointer`}
+        onClick={() =>
+          selectionMode ? onToggleSelect(screenshot.id) : onOpen(screenshot.id)
+        }
       >
         {/* Plain <img>: signed URLs change on every render, so next/image's
             optimizer cache would never hit. */}
@@ -325,12 +313,28 @@ export function ScreenshotCard({
 
       {(category || screenshot.summary || canRetry || error) && (
         <figcaption className="space-y-2 p-3">
-          {category && (
-            <span
-              className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${colorStyles[category.color].badge}`}
-            >
-              {category.name}
-            </span>
+          {(category || smartLabels.length > 0) && (
+            <div className="flex flex-wrap gap-1">
+              {category && (
+                <span
+                  className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${colorStyles[category.color].badge}`}
+                >
+                  {category.name}
+                </span>
+              )}
+              {smartLabels.map((label) => (
+                <span
+                  key={label}
+                  title="Smart details found. Open the photo to see them."
+                  className="inline-flex items-center gap-1 rounded-full bg-linear-to-r from-violet-500/20 to-cyan-400/20 px-2 py-0.5 text-[11px] font-medium text-violet-200 ring-1 ring-violet-400/30"
+                >
+                  <svg aria-hidden viewBox="0 0 24 24" fill="currentColor" className="h-2.5 w-2.5">
+                    <path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" />
+                  </svg>
+                  {label}
+                </span>
+              ))}
+            </div>
           )}
           {screenshot.summary && (
             <p className="line-clamp-3 text-sm text-zinc-300">
