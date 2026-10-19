@@ -1,12 +1,13 @@
 "use client";
 
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ScreenshotCardData } from "@/components/screenshot-card";
-import { SmartCards } from "@/components/smart-cards";
+import { EyeIcon, SmartCards } from "@/components/smart-cards";
 import { toast } from "@/components/toast";
 import { colorStyles, type UserCategory } from "@/lib/categories";
 import { copyToClipboard, downloadUrl } from "@/lib/clipboard";
+import { maskSecrets, secretsOf } from "@/lib/metadata";
 
 const dateFormat = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
@@ -44,6 +45,17 @@ function ModalContent({
 }: Props & { screenshot: ScreenshotCardData }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const category = categories.find((c) => c.id === screenshot.categoryId) ?? null;
+
+  // Passwords found in the image stay masked in the summary and OCR text
+  // until the user asks to see them. Remembered per photo, so stepping to
+  // the next one hides them again.
+  const secrets = secretsOf(screenshot.metadata);
+  const hasSecrets = secrets.length > 0;
+  const [revealedFor, setRevealedFor] = useState<string | null>(null);
+  const showSecrets = revealedFor === screenshot.id;
+  const setShowSecrets = (next: (shown: boolean) => boolean) =>
+    setRevealedFor(next(showSecrets) ? screenshot.id : null);
+  const reveal = (text: string) => (showSecrets ? text : maskSecrets(text, secrets));
 
   // Lock page scroll, focus the dialog, and restore focus on close.
   useEffect(() => {
@@ -109,7 +121,7 @@ function ModalContent({
           <motion.img
             key={screenshot.id}
             src={screenshot.url}
-            alt={screenshot.summary ?? screenshot.filename}
+            alt={screenshot.summary ? reveal(screenshot.summary) : screenshot.filename}
             className="max-h-[60vh] w-full object-contain lg:max-h-[calc(100vh-3rem)]"
             initial={{ opacity: 0, scale: 0.92 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -182,7 +194,7 @@ function ModalContent({
 
             <Section title="Summary">
               {screenshot.summary ? (
-                <p className="text-sm leading-relaxed text-zinc-300">{screenshot.summary}</p>
+                <p className="text-sm leading-relaxed text-zinc-300">{reveal(screenshot.summary)}</p>
               ) : (
                 <p className="text-sm text-zinc-500">
                   {screenshot.status === "done" ? "No summary." : "Still analyzing…"}
@@ -194,23 +206,38 @@ function ModalContent({
               title="Text in image"
               action={
                 screenshot.ocrText && (
-                  <button
-                    type="button"
-                    onClick={copyText}
-                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-violet-300 transition hover:bg-violet-500/10 hover:text-violet-200"
-                  >
-                    <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-3.5 w-3.5">
-                      <rect x="9" y="9" width="11" height="11" rx="2" />
-                      <path strokeLinecap="round" d="M5 15V6a2 2 0 0 1 2-2h8" />
-                    </svg>
-                    Copy text
-                  </button>
+                  <div className="flex items-center gap-1">
+                    {hasSecrets && (
+                      <button
+                        type="button"
+                        onClick={() => setShowSecrets((s) => !s)}
+                        aria-pressed={showSecrets}
+                        title={showSecrets ? "Hide passwords" : "Show passwords"}
+                        className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-zinc-400 transition hover:bg-zinc-900 hover:text-zinc-100"
+                      >
+                        <EyeIcon open={!showSecrets} />
+                        {showSecrets ? "Hide" : "Show"} passwords
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={copyText}
+                      title={hasSecrets ? "Copies the full text, passwords included" : undefined}
+                      className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-violet-300 transition hover:bg-violet-500/10 hover:text-violet-200"
+                    >
+                      <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-3.5 w-3.5">
+                        <rect x="9" y="9" width="11" height="11" rx="2" />
+                        <path strokeLinecap="round" d="M5 15V6a2 2 0 0 1 2-2h8" />
+                      </svg>
+                      Copy text
+                    </button>
+                  </div>
                 )
               }
             >
               {screenshot.ocrText ? (
                 <pre className="max-h-56 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-zinc-300">
-                  {screenshot.ocrText}
+                  {reveal(screenshot.ocrText)}
                 </pre>
               ) : (
                 <p className="text-sm text-zinc-500">No text found.</p>

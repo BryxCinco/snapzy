@@ -10,7 +10,12 @@ import {
   type ProcessingStatus,
   type UserCategory,
 } from "@/lib/categories";
-import { metadataLabels, type ScreenshotMetadata } from "@/lib/metadata";
+import {
+  maskSecrets,
+  metadataLabels,
+  type ScreenshotMetadata,
+  secretsOf,
+} from "@/lib/metadata";
 
 export type ScreenshotCardData = {
   id: string;
@@ -72,6 +77,10 @@ export function ScreenshotCard({
 
   const category = categories.find((c) => c.id === screenshot.categoryId) ?? null;
   const smartLabels = metadataLabels(screenshot.metadata);
+  // Never show a scanned password in the grid; the modal has a reveal toggle.
+  const summary = screenshot.summary
+    ? maskSecrets(screenshot.summary, secretsOf(screenshot.metadata))
+    : null;
   const processing =
     !screenshot.stuck &&
     (screenshot.status === "pending" || screenshot.status === "processing");
@@ -161,7 +170,7 @@ export function ScreenshotCard({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={screenshot.url}
-          alt={screenshot.summary ?? screenshot.filename}
+          alt={summary ?? screenshot.filename}
           loading="lazy"
           decoding="async"
           className={`block h-auto w-full transition duration-300 ease-out group-hover:scale-[1.03] ${
@@ -334,7 +343,7 @@ export function ScreenshotCard({
           )}
           {screenshot.summary && (
             <p className="line-clamp-3 text-sm text-zinc-300">
-              {screenshot.summary}
+              {summary}
             </p>
           )}
           {screenshot.tags.length > 0 && (

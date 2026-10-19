@@ -233,3 +233,29 @@ export function metadataLabels(m: ScreenshotMetadata | null): string[] {
   if (m.emails || m.phones || m.socials || m.addresses) labels.push("Contact");
   return labels;
 }
+
+/** Passwords / PINs the AI found, so the UI can hide them wherever they appear. */
+export function secretsOf(m: ScreenshotMetadata | null): string[] {
+  if (!m) return [];
+  const secrets = [m.wifi?.password, ...(m.credentials?.map((c) => c.password) ?? [])];
+  // Very short values ("1", "ok") would mask ordinary words.
+  return [...new Set(secrets.filter((s): s is string => Boolean(s && s.length >= 3)))];
+}
+
+const MASK = "••••••";
+
+/** Replaces every occurrence of each secret in `text` with a mask. */
+export function maskSecrets(text: string, secrets: string[]): string {
+  if (secrets.length === 0) return text;
+  // Longest first, so "pass123" is masked before "pass".
+  const pattern = [...secrets]
+    .sort((a, b) => b.length - a.length)
+    .map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  // Not inside a longer word: a password "pass" shouldn't turn "password"
+  // into "••••••word". (\b doesn't work, passwords often contain symbols.)
+  return text.replace(
+    new RegExp(`(?<![\\p{L}\\p{N}])(?:${pattern})(?![\\p{L}\\p{N}])`, "gu"),
+    MASK,
+  );
+}

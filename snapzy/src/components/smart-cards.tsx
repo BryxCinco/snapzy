@@ -65,7 +65,6 @@ function SmartShell({
 }
 
 function WifiCard({ wifi }: { wifi: WifiInfo }) {
-  const [revealed, setRevealed] = useState(false);
   return (
     <SmartShell
       title="WiFi network"
@@ -85,14 +84,7 @@ function WifiCard({ wifi }: { wifi: WifiInfo }) {
             <p className="text-xs text-white/70">
               Password{wifi.security && <span className="text-white/50"> · {wifi.security}</span>}
             </p>
-            <button
-              type="button"
-              onClick={() => setRevealed((r) => !r)}
-              title={revealed ? "Hide password" : "Show password"}
-              className="max-w-full truncate font-mono text-base tracking-wide"
-            >
-              {revealed ? wifi.password : "•".repeat(Math.min(wifi.password.length, 14))}
-            </button>
+            <SecretValue value={wifi.password} label="WiFi password" className="text-base" />
           </div>
           <CopyButton value={wifi.password} label="Password" />
         </div>
@@ -249,17 +241,46 @@ function ReceiptCard({ receipt }: { receipt: ReceiptInfo }) {
   );
 }
 
-function SecretValue({ value }: { value: string }) {
+export function EyeIcon({ open }: { open: boolean }) {
+  return open ? (
+    <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ) : (
+    <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3l18 18M10.6 5.1A10.8 10.8 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+    </svg>
+  );
+}
+
+// Hidden by default; the eye button shows / hides it.
+export function SecretValue({
+  value,
+  label = "password",
+  className = "text-sm",
+}: {
+  value: string;
+  label?: string;
+  className?: string;
+}) {
   const [revealed, setRevealed] = useState(false);
   return (
-    <button
-      type="button"
-      onClick={() => setRevealed((r) => !r)}
-      title={revealed ? "Hide" : "Show"}
-      className="max-w-full truncate font-mono text-sm tracking-wide"
-    >
-      {revealed ? value : "•".repeat(Math.min(value.length, 14))}
-    </button>
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className={`min-w-0 truncate font-mono tracking-wide ${className}`}>
+        {revealed ? value : "•".repeat(Math.min(Math.max(value.length, 6), 14))}
+      </span>
+      <button
+        type="button"
+        onClick={() => setRevealed((r) => !r)}
+        aria-label={`${revealed ? "Hide" : "Show"} ${label}`}
+        aria-pressed={revealed}
+        title={revealed ? "Hide" : "Show"}
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-white/80 transition hover:bg-white/15 hover:text-white"
+      >
+        <EyeIcon open={!revealed} />
+      </button>
+    </span>
   );
 }
 
@@ -292,7 +313,7 @@ function CredentialsCard({ credentials }: { credentials: Credential[] }) {
               <div className="mt-1.5 flex items-center justify-between gap-3">
                 <p className="flex min-w-0 items-center gap-1 text-sm">
                   <span className="text-white/60">Pass </span>
-                  <SecretValue value={c.password} />
+                  <SecretValue value={c.password} label={`${c.service ?? "account"} password`} />
                 </p>
                 <CopyButton value={c.password} label="Password" />
               </div>

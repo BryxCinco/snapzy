@@ -104,10 +104,10 @@ const extractedSchema = z.object({
       z.object({
         service: text("Website, app or account the login is for."),
         username: text("Username, email or account ID."),
-        password: text("Password exactly as shown, case-sensitive."),
+        password: text("Password, PIN or passcode exactly as shown, case-sensitive."),
       }),
     )
-    .describe("Login details written in the image, e.g. a note with an account and password. Empty array if none."),
+    .describe("Login details, PINs or passcodes written in the image, e.g. a note with an account and password, a door or phone passcode. Empty array if none."),
   emails: z.array(z.string()).describe("Email addresses visible in the image."),
   phones: z.array(z.string()).describe("Phone numbers exactly as shown, e.g. 0917 123 4567, +63 2 8123 4567."),
   socials: z
@@ -162,7 +162,8 @@ function buildInstructions(categories: CategoryOption[], fallbackName: string) {
   return `You organize a user's screenshots and pictures.
 Look at the image and return:
 - ocr_text: every piece of readable text, transcribed faithfully. Do not summarize it.
-- summary: exactly one plain sentence about what the image shows.
+- summary: exactly one plain sentence about what the image shows. Never put
+  a password, PIN or passcode in the summary or the tags; say "a password" instead.
 - category: choose the best category from this list, using the exact name:
 ${list}
   Judge by the main subject of the image and prefer the most specific category.
