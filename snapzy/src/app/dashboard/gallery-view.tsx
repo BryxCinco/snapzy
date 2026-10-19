@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   categoryLabels,
   categoryStyles,
@@ -9,8 +9,9 @@ import {
   type ScreenshotCardData,
   Spinner,
 } from "@/components/screenshot-card";
+import { Toaster } from "@/components/toast";
 import { CATEGORIES, type Category, isCategory } from "@/lib/categories";
-import { analyzeMultipleScreenshots } from "./actions";
+import { analyzeMultipleScreenshots, searchScreenshots } from "./actions";
 import { ProcessingPoller } from "./processing-poller";
 
 // "all" = every photo; "unsorted" = not analyzed yet, or still carrying a
@@ -62,15 +63,64 @@ function buildAlbums(cards: ScreenshotCardData[]): Album[] {
   return albums;
 }
 
+type SearchState = {
+  query: string;
+  ids: string[];
+  error: string | null;
+};
+
+// Runs the server search whenever ?q= changes (SearchBar debounces it).
+// Also re-runs as photos finish analyzing, so fresh OCR text is searchable.
+function useSearch(query: string, doneCount: number) {
+  const [state, setState] = useState<SearchState>({ query: "", ids: [], error: null });
+
+  useEffect(() => {
+    if (!query) return;
+    let cancelled = false;
+    searchScreenshots(query)
+      .then((result) => {
+        if (cancelled) return;
+        setState(
+          result.ok
+            ? { query, ids: result.ids, error: null }
+            : { query, ids: [], error: result.error },
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setState({ query, ids: [], error: "Search failed. Try again." });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [query, doneCount]);
+
+  const loading = query !== "" && state.query !== query;
+  return { ...state, loading };
+}
+
 export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
   const searchParams = useSearchParams();
   const openKey = parseAlbumKey(searchParams.get("album"));
+  const query = (searchParams.get("q") ?? "").trim();
+  const searching = query !== "";
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
   const [isAnalyzing, startAnalyze] = useTransition();
 
-  const albums = buildAlbums(cards);
+  const search = useSearch(query, cards.filter((c) => c.status === "done").length);
+
+  // While searching, everything below works on the matches only, in rank
+  // order, so the album chips and the open album filter the results.
+  const byId = new Map(cards.map((c) => [c.id, c]));
+  const matched = searching
+    ? search.ids.flatMap((id) => {
+        const card = byId.get(id);
+        return card ? [card] : [];
+      })
+    : cards;
+
+  const albums = buildAlbums(matched);
   const openAlbum = openKey ? albums.find((a) => a.key === openKey) : undefined;
 
   // Drop ids of cards that no longer exist (e.g. deleted).
@@ -145,11 +195,24 @@ export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
     );
   }
 
+  const albumSelectAll = (ids: string[], select: boolean) =>
+    setSelectedIds((prev) => {
+      const next = new Set([...prev].filter((x) => cardIds.has(x)));
+      ids.forEach((id) => (select ? next.add(id) : next.delete(id)));
+      return next;
+    });
+
   return (
     <>
+      <Toaster />
       <ProcessingPoller active={cards.some(isProcessing)} />
 
-      <AlbumSwitcher albums={albums} openKey={openAlbum?.key ?? null} onOpen={openAlbumKey} />
+      <AlbumSwitcher
+        albums={albums}
+        openKey={searching ? openKey : (openAlbum?.key ?? null)}
+        searching={searching}
+        onOpen={openAlbumKey}
+      />
 
       {notice && (
         <p
@@ -160,7 +223,28 @@ export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
         </p>
       )}
 
-      {openAlbum ? (
+      {searching ? (
+        <SearchResults
+          query={query}
+          loading={search.loading}
+          error={search.error}
+          albumLabel={
+            openKey === null || openKey === "all"
+              ? null
+              : openKey === "unsorted"
+                ? "Unsorted"
+                : categoryLabels[openKey]
+          }
+          results={
+            openKey === null || openKey === "all" ? matched : (openAlbum?.cards ?? [])
+          }
+          selectedIds={selectedIds}
+          selectionMode={selectionMode}
+          onToggle={toggle}
+          onSelectAll={albumSelectAll}
+          onClearAlbum={() => openAlbumKey(null)}
+        />
+      ) : openAlbum ? (
         <AlbumDetail
           album={openAlbum}
           selectedIds={selectedIds}
@@ -168,13 +252,7 @@ export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
           isAnalyzing={isAnalyzing}
           onBack={() => openAlbumKey(null)}
           onToggle={toggle}
-          onSelectAll={(ids, select) =>
-            setSelectedIds((prev) => {
-              const next = new Set([...prev].filter((x) => cardIds.has(x)));
-              ids.forEach((id) => (select ? next.add(id) : next.delete(id)));
-              return next;
-            })
-          }
+          onSelectAll={albumSelectAll}
           onReanalyze={() => reanalyze(openAlbum.cards, openAlbum.label)}
         />
       ) : (
@@ -239,12 +317,18 @@ export function GalleryView({ cards }: { cards: ScreenshotCardData[] }) {
 function AlbumSwitcher({
   albums,
   openKey,
+  searching,
   onOpen,
 }: {
   albums: Album[];
   openKey: AlbumKey | null;
+  searching: boolean;
   onOpen: (key: AlbumKey | null) => void;
 }) {
+  // While searching, the first chip means "all results" and the per-album
+  // chips narrow the results, so the separate "All photos" chip is redundant.
+  const chips = searching ? albums.filter((a) => a.key !== "all") : albums;
+  const homeActive = openKey === null || (searching && openKey === "all");
   const chip = (active: boolean) =>
     `flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition ${
       active
@@ -260,20 +344,32 @@ function AlbumSwitcher({
       <div className="flex gap-1 overflow-x-auto py-2 scrollbar-none">
         <button
           type="button"
-          aria-current={openKey === null ? "page" : undefined}
+          aria-current={homeActive ? "page" : undefined}
           onClick={() => onOpen(null)}
-          className={chip(openKey === null)}
+          className={chip(homeActive)}
         >
-          <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
-            <rect x="3" y="3" width="7" height="7" rx="1.5" />
-            <rect x="14" y="3" width="7" height="7" rx="1.5" />
-            <rect x="3" y="14" width="7" height="7" rx="1.5" />
-            <rect x="14" y="14" width="7" height="7" rx="1.5" />
-          </svg>
-          Albums
+          {searching ? (
+            <>
+              <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                <circle cx="11" cy="11" r="7" />
+                <path strokeLinecap="round" d="m20 20-3.5-3.5" />
+              </svg>
+              All results
+            </>
+          ) : (
+            <>
+              <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+                <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                <rect x="14" y="14" width="7" height="7" rx="1.5" />
+              </svg>
+              Albums
+            </>
+          )}
         </button>
         <span aria-hidden className="mx-1 my-2 w-px shrink-0 bg-zinc-800" />
-        {albums.map((a) => (
+        {chips.map((a) => (
           <button
             key={a.key}
             type="button"
@@ -478,6 +574,104 @@ function AlbumDetail({
           />
         ))}
       </div>
+    </>
+  );
+}
+
+function SearchResults({
+  query,
+  loading,
+  error,
+  albumLabel,
+  results,
+  selectedIds,
+  selectionMode,
+  onToggle,
+  onSelectAll,
+  onClearAlbum,
+}: {
+  query: string;
+  loading: boolean;
+  error: string | null;
+  // Set when an album chip narrows the results.
+  albumLabel: string | null;
+  results: ScreenshotCardData[];
+  selectedIds: Set<string>;
+  selectionMode: boolean;
+  onToggle: (id: string) => void;
+  onSelectAll: (ids: string[], select: boolean) => void;
+  onClearAlbum: () => void;
+}) {
+  const allSelected =
+    results.length > 0 && results.every((c) => selectedIds.has(c.id));
+
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {loading && <Spinner />}
+          <p className="min-w-0 truncate text-sm text-zinc-400">
+            {loading ? (
+              "Searching…"
+            ) : (
+              <>
+                <span className="font-medium text-zinc-100">{results.length}</span>{" "}
+                result{results.length === 1 ? "" : "s"} for{" "}
+                <span className="font-medium text-zinc-100">“{query}”</span>
+                {albumLabel && <> in {albumLabel}</>}
+              </>
+            )}
+          </p>
+          {albumLabel && !loading && (
+            <button
+              type="button"
+              onClick={onClearAlbum}
+              className="shrink-0 text-sm font-medium text-violet-400 hover:text-violet-300"
+            >
+              Search all albums
+            </button>
+          )}
+        </div>
+        {results.length > 0 && !loading && (
+          <button
+            type="button"
+            onClick={() => onSelectAll(results.map((c) => c.id), !allSelected)}
+            className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-900"
+          >
+            {allSelected ? "Deselect all" : "Select all"}
+          </button>
+        )}
+      </div>
+
+      {error ? (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {error}
+        </p>
+      ) : !loading && results.length === 0 ? (
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 px-6 py-14 text-center">
+          <p className="font-medium text-zinc-200">No matches</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-zinc-500">
+            Search looks at the text inside your photos and their AI summaries.
+            Try another word, or a phrase in quotes like “order total”.
+          </p>
+        </div>
+      ) : (
+        <div
+          className={`columns-2 gap-4 transition-opacity md:columns-3 lg:columns-4 ${
+            loading ? "opacity-50" : ""
+          }`}
+        >
+          {results.map((card) => (
+            <ScreenshotCard
+              key={card.id}
+              screenshot={card}
+              selected={selectedIds.has(card.id)}
+              selectionMode={selectionMode}
+              onToggleSelect={onToggle}
+            />
+          ))}
+        </div>
+      )}
     </>
   );
 }

@@ -2,7 +2,31 @@
 
 import { useState, useTransition } from "react";
 import { deleteScreenshot, retryProcessing } from "@/app/dashboard/actions";
+import { toast } from "@/components/toast";
 import { type Category, isCategory, type ProcessingStatus } from "@/lib/categories";
+
+// Hover-only controls stay visible on touch screens, which have no hover.
+const HOVER_REVEAL =
+  "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+
+async function copyToClipboard(text: string) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  // The Clipboard API needs HTTPS or localhost; opening the dev server from a
+  // phone over the LAN (http://192.168…) lands here.
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const ok = document.execCommand("copy");
+  textarea.remove();
+  if (!ok) throw new Error("Copy failed");
+}
 
 export type ScreenshotCardData = {
   id: string;
@@ -13,6 +37,7 @@ export type ScreenshotCardData = {
   // Pending/processing for too long — the background job likely died.
   stuck: boolean;
   summary: string | null;
+  ocrText: string | null;
   // May still hold a value from the old category list until re-analyzed.
   category: string | null;
   tags: string[];
@@ -93,6 +118,16 @@ export function ScreenshotCard({
     });
   }
 
+  async function handleCopy() {
+    if (!screenshot.ocrText) return;
+    try {
+      await copyToClipboard(screenshot.ocrText);
+      toast("Text copied!");
+    } catch {
+      setError("Couldn't copy. Your browser blocked clipboard access.");
+    }
+  }
+
   function handleRetry() {
     setError(null);
     startRetry(async () => {
@@ -157,7 +192,7 @@ export function ScreenshotCard({
             selected
               ? "bg-violet-600 text-white ring-violet-400"
               : "bg-zinc-950/70 text-transparent ring-white/20 hover:ring-white/50"
-          } ${selected || selectionMode ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}
+          } ${selected || selectionMode ? "opacity-100" : HOVER_REVEAL}`}
         >
           <svg
             aria-hidden
@@ -171,6 +206,31 @@ export function ScreenshotCard({
           </svg>
         </button>
 
+        <div className={`absolute top-2 right-2 flex gap-1.5 transition ${HOVER_REVEAL}`}>
+        {screenshot.ocrText && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCopy();
+            }}
+            aria-label={`Copy text from ${screenshot.filename}`}
+            title="Copy text"
+            className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-950/70 text-zinc-300 ring-1 ring-white/10 backdrop-blur transition hover:bg-violet-600 hover:text-white"
+          >
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              className="h-4 w-4"
+            >
+              <rect x="9" y="9" width="11" height="11" rx="2" />
+              <path strokeLinecap="round" d="M5 15V6a2 2 0 0 1 2-2h8" />
+            </svg>
+          </button>
+        )}
         <button
           type="button"
           onClick={(e) => {
@@ -180,7 +240,7 @@ export function ScreenshotCard({
           disabled={isDeleting}
           aria-label={`Delete ${screenshot.filename}`}
           title="Delete"
-          className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-lg bg-zinc-950/70 text-zinc-300 opacity-0 ring-1 ring-white/10 backdrop-blur transition group-hover:opacity-100 hover:bg-red-500/90 hover:text-white focus-visible:opacity-100"
+          className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-950/70 text-zinc-300 ring-1 ring-white/10 backdrop-blur transition hover:bg-red-500/90 hover:text-white"
         >
           <svg
             aria-hidden
@@ -197,6 +257,7 @@ export function ScreenshotCard({
             />
           </svg>
         </button>
+        </div>
       </div>
 
       {(screenshot.category || screenshot.summary || canRetry || error) && (

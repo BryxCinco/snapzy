@@ -235,6 +235,51 @@ async function runQueue(
   );
 }
 
+export type SearchResult =
+  | { ok: true; ids: string[]; ranked: boolean }
+  | { ok: false; error: string };
+
+const MAX_QUERY_LENGTH = 200;
+
+/**
+ * Full-text search over summary + OCR text (the `search_vector` column).
+ * Returns matching ids, best match first. Uses the ranked
+ * `search_screenshots` RPC (supabase/migrations/004_search.sql) and falls
+ * back to an unranked `textSearch` if that migration hasn't been run.
+ */
+export async function searchScreenshots(query: string): Promise<SearchResult> {
+  const q = String(query ?? "").trim().slice(0, MAX_QUERY_LENGTH);
+  if (!q) return { ok: true, ids: [], ranked: true };
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("search_screenshots", { q });
+  if (!error) {
+    return {
+      ok: true,
+      ids: (data as { id: string }[]).map((r) => r.id),
+      ranked: true,
+    };
+  }
+
+  // PGRST202 = function not found (migration 004 not applied yet).
+  if (error.code !== "PGRST202") {
+    return { ok: false, error: error.message };
+  }
+
+  const { data: rows, error: fallbackError } = await supabase
+    .from("screenshots")
+    .select("id")
+    .eq("is_archived", false)
+    .textSearch("search_vector", q, { type: "websearch", config: "english" })
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (fallbackError) {
+    return { ok: false, error: fallbackError.message };
+  }
+  return { ok: true, ids: rows.map((r) => r.id), ranked: false };
+}
+
 export async function deleteScreenshot(
   screenshotId: string,
 ): Promise<ActionResult> {

@@ -7,6 +7,7 @@ import type { ScreenshotCardData } from "@/components/screenshot-card";
 import { type ProcessingStatus, STUCK_AFTER_MS } from "@/lib/categories";
 import { createClient } from "@/lib/supabase/server";
 import { GalleryView } from "./gallery-view";
+import { SearchBar, SearchBarFallback } from "./search-bar";
 import { UploadZone } from "./upload-zone";
 
 export const metadata: Metadata = { title: "Dashboard · Snapzy" };
@@ -19,17 +20,23 @@ export default function DashboardPage() {
   return (
     <div className="flex flex-1 flex-col bg-zinc-950 text-zinc-100">
       {/* Fixed h-16 so the sticky category tabs can sit right under it (top-16). */}
-      <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-zinc-800 bg-zinc-950/90 px-6 backdrop-blur">
-        <div className="flex items-center gap-2 font-semibold tracking-tight">
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-zinc-800 bg-zinc-950/90 px-4 backdrop-blur sm:gap-6 sm:px-6">
+        <div className="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-linear-to-br from-violet-500 to-cyan-400 text-xs font-bold text-zinc-950">
             S
           </span>
-          Snapzy
+          <span className="hidden sm:inline">Snapzy</span>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex min-w-0 flex-1 justify-center">
+          {/* useSearchParams needs a Suspense boundary under cacheComponents. */}
+          <Suspense fallback={<SearchBarFallback />}>
+            <SearchBar />
+          </Suspense>
+        </div>
+        <div className="flex shrink-0 items-center gap-4">
           <Suspense
             fallback={
-              <span className="hidden h-4 w-40 animate-pulse rounded bg-zinc-800 sm:inline-block" />
+              <span className="hidden h-4 w-40 animate-pulse rounded bg-zinc-800 lg:inline-block" />
             }
           >
             <CurrentUser />
@@ -37,19 +44,23 @@ export default function DashboardPage() {
           <form action={logout}>
             <button
               type="submit"
-              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
+              aria-label="Log out"
+              title="Log out"
+              className="flex h-10 items-center gap-2 rounded-lg border border-zinc-700 px-2.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900 sm:px-3"
             >
-              Log out
+              <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4 sm:hidden">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17l5-5-5-5M20 12H9M12 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" />
+              </svg>
+              <span className="hidden sm:inline">Log out</span>
             </button>
           </form>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Your library</h1>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Your library</h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Upload screenshots now. AI sorting and search arrive in the next
-          phase.
+          AI sorts every photo into albums. Search finds the text inside them.
         </p>
 
         <div className="mt-6">
@@ -82,7 +93,9 @@ async function CurrentUser() {
   }
 
   return (
-    <span className="hidden text-sm text-zinc-400 sm:inline">{user.email}</span>
+    <span className="hidden max-w-48 truncate text-sm text-zinc-400 lg:inline">
+      {user.email}
+    </span>
   );
 }
 
@@ -94,7 +107,7 @@ async function Gallery() {
   const { data: rows, error } = await supabase
     .from("screenshots")
     .select(
-      "id, storage_path, original_filename, created_at, summary, category, status, processing_started_at, screenshot_tags(tags(name))",
+      "id, storage_path, original_filename, created_at, summary, ocr_text, category, status, processing_started_at, screenshot_tags(tags(name))",
     )
     .eq("is_archived", false)
     .order("created_at", { ascending: false });
@@ -141,6 +154,7 @@ async function Gallery() {
           (status === "pending" || status === "processing") &&
           now - startedAt > STUCK_AFTER_MS,
         summary: r.summary,
+        ocrText: r.ocr_text ?? null,
         category: r.category ?? null,
         tags: extractTagNames(r.screenshot_tags),
       },
