@@ -86,7 +86,7 @@ export function UploadZone() {
     : 0;
 
   return (
-    <section aria-label="Upload screenshots">
+    <section aria-label="Upload screenshots" className="h-full">
       <div
         role="button"
         tabIndex={0}
@@ -115,7 +115,7 @@ export function UploadZone() {
           uploadFiles(Array.from(e.dataTransfer.files));
         }}
         style={{ ["--c" as string]: "rgb(255 255 255 / 0.75)" }}
-        className={`sketch-border group relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl px-5 py-5 text-center text-white backdrop-blur-md transition duration-300 outline-none focus-visible:ring-4 focus-visible:ring-white/50 ${
+        className={`sketch-border group relative flex h-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl px-5 py-5 text-center text-white backdrop-blur-md transition duration-300 outline-none focus-visible:ring-4 focus-visible:ring-white/50 ${
           isDragging ? "scale-[1.02] bg-white/35" : "bg-white/15 hover:bg-white/25"
         } ${uploading ? "cursor-wait" : ""}`}
       >

@@ -294,7 +294,7 @@ export function GalleryView({
           albumCount={categories.length}
           firstName={firstName}
           toSort={cards.filter(needsAnalysis)}
-          processingCount={cards.filter(isProcessing).length}
+          processing={cards.filter(isProcessing)}
           runTotal={runTotal}
           sorting={isAnalyzing}
           onSort={() => analyze(cards.filter(needsAnalysis).map((c) => c.id), false)}
