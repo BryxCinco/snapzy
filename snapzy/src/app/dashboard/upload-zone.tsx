@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
+import { useT } from "@/components/preferences";
 import { isAllowedImageType, MAX_UPLOAD_BYTES } from "@/lib/uploads";
 import { uploadScreenshot } from "./actions";
 import { NAV_EVENTS } from "./mobile-nav";
@@ -8,6 +9,7 @@ import { NAV_EVENTS } from "./mobile-nav";
 type Progress = { done: number; total: number };
 
 export function UploadZone() {
+  const t = useT();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState<Progress | null>(null);
@@ -113,7 +115,7 @@ export function UploadZone() {
           uploadFiles(Array.from(e.dataTransfer.files));
         }}
         style={{ ["--c" as string]: "rgb(255 255 255 / 0.75)" }}
-        className={`sketch-border group relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl px-6 py-8 text-center text-white backdrop-blur-md transition duration-300 outline-none focus-visible:ring-4 focus-visible:ring-white/50 ${
+        className={`sketch-border group relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl px-5 py-5 text-center text-white backdrop-blur-md transition duration-300 outline-none focus-visible:ring-4 focus-visible:ring-white/50 ${
           isDragging ? "scale-[1.02] bg-white/35" : "bg-white/15 hover:bg-white/25"
         } ${uploading ? "cursor-wait" : ""}`}
       >
@@ -126,7 +128,7 @@ export function UploadZone() {
         />
 
         <div
-          className={`relative grid h-14 w-14 place-items-center rounded-2xl bg-white text-brand-deep shadow-soft transition duration-300 ${
+          className={`relative grid h-11 w-11 place-items-center rounded-2xl bg-white text-brand-deep shadow-soft transition duration-300 ${
             isDragging ? "-translate-y-1 rotate-6" : "group-hover:-rotate-6"
           }`}
         >
@@ -138,7 +140,7 @@ export function UploadZone() {
         {uploading && progress ? (
           <div className="relative mt-4 w-full max-w-xs">
             <p className="text-sm font-semibold">
-              Hanging {Math.min(progress.done + 1, progress.total)} of {progress.total}…
+              {t("upload.progress", { current: Math.min(progress.done + 1, progress.total), total: progress.total })}
             </p>
             <div
               role="progressbar"
@@ -156,14 +158,14 @@ export function UploadZone() {
           </div>
         ) : (
           <>
-            <p className="relative mt-4 text-sm font-semibold">
-              {isDragging ? "Let go to add them ✿" : "Drop photos here, or browse"}
+            <p className="relative mt-3 text-sm font-semibold">
+              {isDragging ? t("upload.release") : t("upload.drop")}
             </p>
             <p className="relative mt-1 font-hand text-lg text-white/85">
-              or paste with Ctrl + V
+              {t("upload.paste")}
             </p>
             <p className="relative mt-1 text-[11px] tracking-wide text-white/70 uppercase">
-              PNG · JPG · WEBP · GIF · up to 10 MB
+              {t("upload.formats")}
             </p>
           </>
         )}
@@ -184,7 +186,7 @@ export function UploadZone() {
       {errors.length > 0 && (
         <ul
           role="alert"
-          className="mt-3 space-y-1 rounded-2xl bg-white/95 px-4 py-3 text-sm text-red-600 shadow-soft"
+          className="mt-3 space-y-1 rounded-2xl bg-card/95 px-4 py-3 text-sm text-red-600 shadow-soft"
         >
           {errors.map((err, i) => (
             <li key={i}>{err}</li>

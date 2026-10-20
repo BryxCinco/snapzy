@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Caveat, Poppins } from "next/font/google";
+import { ThemeSync } from "@/components/preferences";
+import { themeBootScript } from "@/lib/theme-boot";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -29,8 +31,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="en"
       className={`${poppins.variable} ${caveat.variable} h-full antialiased`}
+      // The boot script sets data-theme / lang before React hydrates.
+      suppressHydrationWarning
     >
-      <body className="flex min-h-full flex-col bg-paper font-sans text-ink">{children}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+      </head>
+      <body className="flex min-h-full flex-col bg-paper font-sans text-ink">
+        <ThemeSync />
+        {children}
+      </body>
     </html>
   );
 }

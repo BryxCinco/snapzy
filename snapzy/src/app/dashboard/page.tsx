@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { logout } from "@/app/(auth)/actions";
+import { T } from "@/components/preferences";
 import type { ScreenshotCardData } from "@/components/screenshot-card";
 import { type ProcessingStatus, STUCK_AFTER_MS } from "@/lib/categories";
 import { getUserCategories } from "@/lib/categories-server";
@@ -27,7 +28,7 @@ export default function DashboardPage() {
       <WatercolorBackdrop />
 
       {/* Fixed h-16 so the sticky album bar can sit right under it (top-16). */}
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line/70 bg-white/75 px-4 backdrop-blur-xl sm:gap-6 sm:px-6">
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line/70 bg-card/75 px-4 backdrop-blur-xl sm:gap-6 sm:px-6">
         <div className="shrink-0">
           <Logo href="/dashboard" />
         </div>
@@ -37,64 +38,63 @@ export default function DashboardPage() {
             <SearchBar />
           </Suspense>
         </div>
-        <div className="hidden shrink-0 items-center gap-3 sm:flex">
+        <div className="hidden shrink-0 items-center gap-2 sm:flex">
           <Suspense fallback={<span className="h-9 w-9 animate-pulse rounded-full bg-line" />}>
             <CurrentUser />
           </Suspense>
-          <LogoutButton />
+          <SettingsLink />
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-6 pb-32 sm:px-6 sm:pt-8 sm:pb-16">
-        <section className="relative overflow-hidden rounded-4xl bg-linear-to-br from-brand via-[#8cbcf0] to-blush p-6 text-white shadow-lift sm:p-8">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-4 pb-32 sm:px-6 sm:pt-6 sm:pb-16">
+        {/* Compact banner so the albums are visible without scrolling. */}
+        <section className="relative overflow-hidden rounded-4xl bg-linear-to-br from-brand via-lilac to-blush px-5 py-5 text-white shadow-lift sm:px-7 sm:py-6">
           <div aria-hidden className="wash animate-drift -top-16 -right-10 h-72 w-72 bg-white/50" />
           <div aria-hidden className="wash animate-drift -bottom-24 left-1/3 h-64 w-96 bg-lilac" style={{ animationDelay: "-8s" }} />
-          <div className="relative grid items-center gap-6 lg:grid-cols-[1fr_minmax(0,26rem)]">
-            <div>
-              <Suspense fallback={<p className="font-hand text-3xl text-white/90">hello there,</p>}>
+          <div className="relative grid items-center gap-5 sm:grid-cols-[1fr_minmax(0,22rem)]">
+            <div className="min-w-0">
+              <Suspense fallback={<p className="font-hand text-2xl text-white/90">hello,</p>}>
                 <HeroGreeting />
               </Suspense>
-              <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">Your gallery</h1>
-              <p className="mt-2 max-w-md text-sm leading-relaxed text-white/85 sm:text-base">
-                Drop in screenshots and photos. AI reads them, writes a caption and
-                hangs each one in the right album.
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                <T k="hero.title" />
+              </h1>
+              <p className="mt-1 hidden max-w-md text-sm leading-relaxed text-white/85 md:block">
+                <T k="hero.subtitle" />
               </p>
             </div>
-            <UploadZone />
+            {/* Phones upload with the big + in the bottom bar instead. */}
+            <div className="hidden sm:block">
+              <UploadZone />
+            </div>
           </div>
         </section>
 
-        <div className="mt-8">
+        <div className="mt-5">
           <Suspense fallback={<GallerySkeleton />}>
             <Gallery />
           </Suspense>
         </div>
       </main>
 
-      <MobileNav logout={<LogoutButton compact />} />
+      <MobileNav />
     </div>
   );
 }
 
-function LogoutButton({ compact = false }: { compact?: boolean }) {
+function SettingsLink() {
   return (
-    <form action={logout}>
-      <button
-        type="submit"
-        aria-label="Log out"
-        title="Log out"
-        className={
-          compact
-            ? "flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] font-medium text-mute"
-            : "flex h-9 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-mute ring-1 ring-line transition hover:bg-white hover:text-ink"
-        }
-      >
-        <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={compact ? "h-5 w-5" : "h-4 w-4"}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 17l5-5-5-5M20 12H9M12 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" />
-        </svg>
-        {compact ? "Log out" : <span className="hidden md:inline">Log out</span>}
-      </button>
-    </form>
+    <Link
+      href="/dashboard/settings"
+      aria-label="Settings"
+      title="Settings"
+      className="grid h-10 w-10 place-items-center rounded-full bg-card text-ink/70 shadow-soft ring-1 ring-line transition hover:rotate-45 hover:text-brand-deep"
+    >
+      <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4.5 w-4.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M10.3 4.3a1.7 1.7 0 0 1 3.4 0 1.7 1.7 0 0 0 2.6 1 1.7 1.7 0 0 1 2.4 2.4 1.7 1.7 0 0 0 1 2.6 1.7 1.7 0 0 1 0 3.4 1.7 1.7 0 0 0-1 2.6 1.7 1.7 0 0 1-2.4 2.4 1.7 1.7 0 0 0-2.6 1 1.7 1.7 0 0 1-3.4 0 1.7 1.7 0 0 0-2.6-1 1.7 1.7 0 0 1-2.4-2.4 1.7 1.7 0 0 0-1-2.6 1.7 1.7 0 0 1 0-3.4 1.7 1.7 0 0 0 1-2.6 1.7 1.7 0 0 1 2.4-2.4 1.7 1.7 0 0 0 2.6-1Z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    </Link>
   );
 }
 
@@ -123,12 +123,13 @@ async function CurrentUser() {
   return (
     <span className="flex items-center gap-2.5">
       <span className="hidden max-w-44 truncate text-sm text-mute lg:inline">{user.email}</span>
-      <span
+      <Link
+        href="/dashboard/settings"
         title={user.email}
-        className="grid h-9 w-9 place-items-center rounded-full bg-linear-to-br from-brand to-lilac text-sm font-semibold text-white shadow-soft"
+        className="grid h-9 w-9 place-items-center rounded-full bg-linear-to-br from-brand to-lilac text-sm font-semibold text-white shadow-soft transition hover:scale-105"
       >
         {name[0]}
-      </span>
+      </Link>
     </span>
   );
 }
@@ -275,7 +276,7 @@ function GallerySkeleton() {
   return (
     <div className="columns-2 gap-4 md:columns-3 lg:columns-4">
       {skeletonHeights.map((h, i) => (
-        <div key={i} className="mb-4 break-inside-avoid rounded-3xl bg-white p-2.5 shadow-soft">
+        <div key={i} className="mb-4 break-inside-avoid rounded-3xl bg-card p-2.5 shadow-soft">
           <div className={`animate-pulse rounded-2xl bg-brand-soft ${h}`} />
           <div className="mt-3 h-3 w-2/3 animate-pulse rounded-full bg-line" />
           <div className="mt-2 mb-1 h-2.5 w-1/3 animate-pulse rounded-full bg-line/70" />

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { photoLayoutId, type ScreenshotCardData } from "@/components/screenshot-card";
 import { EyeIcon, SmartCards } from "@/components/smart-cards";
+import { useT } from "@/components/preferences";
 import { toast } from "@/components/toast";
 import { colorStyles, type UserCategory } from "@/lib/categories";
 import { copyToClipboard, downloadUrl } from "@/lib/clipboard";
@@ -43,6 +44,7 @@ function ModalContent({
   prevId,
   nextId,
 }: Props & { screenshot: ScreenshotCardData }) {
+  const t = useT();
   const closeRef = useRef<HTMLButtonElement>(null);
   // Only the photo that was clicked grows out of its card; photos reached
   // with ←/→ just fade in, so they don't fly in from elsewhere in the grid.
@@ -90,7 +92,7 @@ function ModalContent({
     if (!screenshot.ocrText) return;
     try {
       await copyToClipboard(screenshot.ocrText);
-      toast("Text copied!");
+      toast(t("card.copied"));
     } catch {
       toast("Couldn't copy. Clipboard access was blocked.");
     }
@@ -114,14 +116,14 @@ function ModalContent({
         role="dialog"
         aria-modal="true"
         aria-label={screenshot.filename}
-        className="relative flex h-full w-full max-w-6xl flex-col overflow-y-auto bg-white shadow-lift sm:h-auto sm:max-h-full sm:rounded-4xl lg:flex-row lg:overflow-hidden"
+        className="relative flex h-full w-full max-w-6xl flex-col overflow-y-auto bg-card shadow-lift sm:h-auto sm:max-h-full sm:rounded-4xl lg:flex-row lg:overflow-hidden"
         initial={{ opacity: 0, scale: 0.96, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.97, y: 8 }}
         transition={{ type: "spring", stiffness: 380, damping: 32 }}
       >
         {/* Image side */}
-        <div className="paper-grain relative flex min-h-[48vh] shrink-0 flex-col items-center justify-center overflow-hidden bg-linear-to-br from-brand-soft via-paper to-[#fbeff3] px-6 pt-14 pb-8 sm:px-10 lg:min-h-0 lg:flex-1 lg:py-10">
+        <div className="paper-grain relative flex min-h-[48vh] shrink-0 flex-col items-center justify-center overflow-hidden bg-linear-to-br from-brand-soft via-paper to-blush/40 px-6 pt-14 pb-8 sm:px-10 lg:min-h-0 lg:flex-1 lg:py-10">
           <div aria-hidden className="wash animate-drift -top-24 -left-20 h-80 w-80 bg-brand/40" />
           <div aria-hidden className="wash animate-drift -right-16 -bottom-24 h-72 w-96 bg-blush" style={{ animationDelay: "-6s" }} />
 
@@ -156,7 +158,7 @@ function ModalContent({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="absolute top-3 right-3 grid h-10 w-10 place-items-center rounded-full bg-white text-ink/70 shadow-soft transition hover:text-brand-deep lg:hidden"
+            className="absolute top-3 right-3 grid h-10 w-10 place-items-center rounded-full bg-card text-ink/70 shadow-soft transition hover:text-brand-deep lg:hidden"
           >
             <CloseIcon />
           </button>
@@ -208,18 +210,18 @@ function ModalContent({
 
             {screenshot.metadata && <SmartCards metadata={screenshot.metadata} />}
 
-            <Section title="Summary">
+            <Section title={t("modal.summary")}>
               {screenshot.summary ? (
                 <p className="text-sm leading-relaxed text-ink/80">{reveal(screenshot.summary)}</p>
               ) : (
                 <p className="text-sm text-mute">
-                  {screenshot.status === "done" ? "No summary." : "Still analyzing…"}
+                  {screenshot.status === "done" ? t("modal.noSummary") : t("modal.analyzing")}
                 </p>
               )}
             </Section>
 
             <Section
-              title="Text in image"
+              title={t("modal.text")}
               action={
                 screenshot.ocrText && (
                   <div className="flex items-center gap-1">
@@ -228,11 +230,11 @@ function ModalContent({
                         type="button"
                         onClick={() => setShowSecrets((s) => !s)}
                         aria-pressed={showSecrets}
-                        title={showSecrets ? "Hide passwords" : "Show passwords"}
+                        title={showSecrets ? t("modal.hidePasswords") : t("modal.showPasswords")}
                         className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-mute transition hover:bg-paper hover:text-brand-deep"
                       >
                         <EyeIcon open={!showSecrets} />
-                        {showSecrets ? "Hide" : "Show"} passwords
+                        {showSecrets ? t("modal.hidePasswords") : t("modal.showPasswords")}
                       </button>
                     )}
                     <button
@@ -245,7 +247,7 @@ function ModalContent({
                         <rect x="9" y="9" width="11" height="11" rx="2" />
                         <path strokeLinecap="round" d="M5 15V6a2 2 0 0 1 2-2h8" />
                       </svg>
-                      Copy text
+                      {t("action.copyText")}
                     </button>
                   </div>
                 )
@@ -256,12 +258,12 @@ function ModalContent({
                   {reveal(screenshot.ocrText)}
                 </pre>
               ) : (
-                <p className="text-sm text-mute">No text found.</p>
+                <p className="text-sm text-mute">{t("modal.noText")}</p>
               )}
             </Section>
 
             {screenshot.tags.length > 0 && (
-              <Section title="Tags">
+              <Section title={t("modal.tags")}>
                 <ul className="flex flex-wrap gap-1.5">
                   {screenshot.tags.map((tag) => (
                     <li
@@ -276,7 +278,7 @@ function ModalContent({
             )}
 
             {related.length > 0 && (
-              <Section title="Other photos">
+              <Section title={t("modal.others")}>
                 <ul className="grid grid-cols-4 gap-2">
                   {related.map((r) => (
                     <li key={r.id}>
@@ -340,7 +342,7 @@ function NavButton({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className={`absolute top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/95 text-ink/70 shadow-soft transition hover:scale-105 hover:text-brand-deep ${
+      className={`absolute top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-card/95 text-ink/70 shadow-soft transition hover:scale-105 hover:text-brand-deep ${
         side === "left" ? "left-3" : "right-3"
       }`}
     >

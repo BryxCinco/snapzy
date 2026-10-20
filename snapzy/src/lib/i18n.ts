@@ -1,0 +1,287 @@
+// UI strings in English and Tagalog. Keys are grouped by screen.
+// `{name}`-style placeholders are filled in by t(key, { name }).
+
+export const LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "tl", label: "Tagalog" },
+] as const;
+
+export type Lang = (typeof LANGUAGES)[number]["code"];
+
+const en = {
+  // Greeting
+  "greet.late": "up late",
+  "greet.morning": "good morning",
+  "greet.afternoon": "good afternoon",
+  "greet.evening": "good evening",
+  "greet.hello": "hello",
+
+  // Dashboard hero
+  "hero.title": "Your gallery",
+  "hero.subtitle": "Drop in screenshots and photos. AI reads them, writes a caption and hangs each one in the right album.",
+
+  // Header / nav
+  "nav.search": "Find anything in your photos…",
+  "nav.home": "Home",
+  "nav.searchTab": "Search",
+  "nav.upload": "Upload photos",
+  "nav.albums": "Albums",
+  "nav.settings": "Settings",
+
+  // Upload zone
+  "upload.drop": "Drop photos here, or browse",
+  "upload.release": "Let go to add them ✿",
+  "upload.paste": "or paste with Ctrl + V",
+  "upload.formats": "PNG · JPG · WEBP · GIF · up to 10 MB",
+  "upload.progress": "Hanging {current} of {total}…",
+
+  // Album bar / grid
+  "albums.home": "Albums",
+  "albums.allResults": "All results",
+  "albums.manage": "Manage",
+  "albums.allPhotos": "All photos",
+  "albums.unsorted": "Unsorted",
+  "albums.yourWalls": "your walls",
+  "albums.count": "{count} albums",
+  "albums.countOne": "1 album",
+  "albums.photos": "{count} photos",
+  "albums.photosOne": "1 photo",
+  "albums.everything": "everything, newest first",
+  "albums.empty": "an empty wall, waiting for its first print",
+  "albums.onThisWall": "on this wall",
+  "albums.findingHome": "still finding a home",
+  "albums.back": "Back to albums",
+
+  // Shared actions
+  "action.zip": "ZIP",
+  "action.reanalyzeAll": "Re-analyze all",
+  "action.reanalyze": "Re-analyze",
+  "action.selectAll": "Select all",
+  "action.deselectAll": "Deselect all",
+  "action.analyzeSelected": "Analyze selected",
+  "action.clearSelection": "Clear selection",
+  "action.picked": "picked",
+  "action.view": "View",
+  "action.retry": "Retry",
+  "action.runAi": "Run AI",
+  "action.copyText": "Copy text",
+  "action.searchAll": "Search all albums",
+
+  // Cards
+  "card.reading": "reading it…",
+  "card.sorting": "Sorting…",
+  "card.tooLong": "Took too long.",
+  "card.failed": "Couldn't read this one.",
+  "card.copied": "Text copied!",
+  "card.moved": "Moved to {name}",
+  "card.moveTo": "move to…",
+  "card.confirmDelete": "Delete this photo? This can't be undone.",
+
+  // Search
+  "search.looking": "looking…",
+  "search.found": "{count} found",
+  "search.in": "in {album}",
+  "search.noneTitle": "Nothing matches yet",
+  "search.noneBody": "Search reads the text inside your photos and their captions. Try another word, or a phrase in quotes like “order total”.",
+
+  // Empty gallery
+  "empty.title": "Your gallery is waiting",
+  "empty.body": "Drop a screenshot in the box above, or press Ctrl + V to paste one. We'll frame it and find it a wall.",
+
+  // Bulk notices
+  "notice.nothing": "Nothing to analyze. These are already up to date.",
+  "notice.analyzing": "Analyzing {count} photos. They'll move into the right albums when done.",
+  "notice.confirmReanalyze": "Re-analyze {count} photos in \"{album}\"? Every image is sent to the AI again, which may take a few minutes.",
+
+  // Modal
+  "modal.summary": "Summary",
+  "modal.text": "Text in image",
+  "modal.tags": "Tags",
+  "modal.others": "Other photos",
+  "modal.noSummary": "No summary.",
+  "modal.analyzing": "Still analyzing…",
+  "modal.noText": "No text found.",
+  "modal.showPasswords": "Show passwords",
+  "modal.hidePasswords": "Hide passwords",
+
+  // Settings
+  "settings.title": "Settings",
+  "settings.note": "make it yours",
+  "settings.back": "Back to gallery",
+  "settings.account": "Account",
+  "settings.email": "Email",
+  "settings.joined": "Joined",
+  "settings.library": "Library",
+  "settings.libraryValue": "{photos} photos · {albums} albums",
+  "settings.password": "Change password",
+  "settings.passwordNew": "New password",
+  "settings.passwordSave": "Update password",
+  "settings.passwordSaved": "Password updated",
+  "settings.logout": "Log out",
+  "settings.appearance": "Appearance",
+  "settings.appearanceHint": "How Snapzy looks on this device.",
+  "settings.light": "Light",
+  "settings.dark": "Dark",
+  "settings.system": "System",
+  "settings.language": "Language",
+  "settings.languageHint": "Menus and buttons. Photo captions stay as the AI wrote them.",
+  "settings.data": "Your data",
+  "settings.dataHint": "These can't be undone.",
+  "settings.clearPhotos": "Delete all photos",
+  "settings.clearPhotosHint": "Removes every photo, its text and tags. Albums stay.",
+  "settings.resetCategories": "Reset albums",
+  "settings.resetCategoriesHint": "Removes albums you made and restores the built-in ones. Photos move to Other.",
+  "settings.typeToConfirm": "Type DELETE to confirm",
+  "settings.confirm": "Confirm",
+  "settings.cancel": "Cancel",
+  "settings.cleared": "All photos deleted",
+  "settings.reset": "Albums reset",
+  "settings.about": "About & legal",
+  "settings.aboutLink": "About Snapzy",
+  "settings.terms": "Terms and Conditions",
+  "settings.privacy": "Privacy Policy",
+  "settings.legalNote": "Legal pages are available in English.",
+  "settings.version": "Version {version}",
+} as const;
+
+export type MessageKey = keyof typeof en;
+
+const tl: Record<MessageKey, string> = {
+  "greet.late": "gising ka pa",
+  "greet.morning": "magandang umaga",
+  "greet.afternoon": "magandang hapon",
+  "greet.evening": "magandang gabi",
+  "greet.hello": "kumusta",
+
+  "hero.title": "Ang iyong gallery",
+  "hero.subtitle": "Ihulog dito ang mga screenshot at litrato. Babasahin ito ng AI, lalagyan ng caption at isasabit sa tamang album.",
+
+  "nav.search": "Hanapin ang kahit ano sa mga litrato mo…",
+  "nav.home": "Home",
+  "nav.searchTab": "Hanap",
+  "nav.upload": "Mag-upload ng litrato",
+  "nav.albums": "Mga album",
+  "nav.settings": "Settings",
+
+  "upload.drop": "Ihulog dito ang mga litrato, o pumili",
+  "upload.release": "Bitawan para idagdag ✿",
+  "upload.paste": "o i-paste gamit ang Ctrl + V",
+  "upload.formats": "PNG · JPG · WEBP · GIF · hanggang 10 MB",
+  "upload.progress": "Isinasabit ang {current} sa {total}…",
+
+  "albums.home": "Mga album",
+  "albums.allResults": "Lahat ng resulta",
+  "albums.manage": "Ayusin",
+  "albums.allPhotos": "Lahat ng litrato",
+  "albums.unsorted": "Hindi pa naayos",
+  "albums.yourWalls": "ang iyong mga pader",
+  "albums.count": "{count} album",
+  "albums.countOne": "1 album",
+  "albums.photos": "{count} litrato",
+  "albums.photosOne": "1 litrato",
+  "albums.everything": "lahat, pinakabago muna",
+  "albums.empty": "walang laman pa, naghihintay ng unang litrato",
+  "albums.onThisWall": "sa pader na ito",
+  "albums.findingHome": "naghahanap pa ng lugar",
+  "albums.back": "Bumalik sa mga album",
+
+  "action.zip": "ZIP",
+  "action.reanalyzeAll": "Suriin lahat ulit",
+  "action.reanalyze": "Suriin ulit",
+  "action.selectAll": "Piliin lahat",
+  "action.deselectAll": "Alisin ang pili",
+  "action.analyzeSelected": "Suriin ang napili",
+  "action.clearSelection": "Alisin ang pili",
+  "action.picked": "napili",
+  "action.view": "Tingnan",
+  "action.retry": "Subukan ulit",
+  "action.runAi": "Patakbuhin ang AI",
+  "action.copyText": "Kopyahin ang text",
+  "action.searchAll": "Hanapin sa lahat",
+
+  "card.reading": "binabasa…",
+  "card.sorting": "Inaayos…",
+  "card.tooLong": "Masyadong natagalan.",
+  "card.failed": "Hindi ito nabasa.",
+  "card.copied": "Nakopya ang text!",
+  "card.moved": "Inilipat sa {name}",
+  "card.moveTo": "ilipat sa…",
+  "card.confirmDelete": "Burahin ang litratong ito? Hindi na ito maibabalik.",
+
+  "search.looking": "hinahanap…",
+  "search.found": "{count} nakita",
+  "search.in": "sa {album}",
+  "search.noneTitle": "Wala pang tumugma",
+  "search.noneBody": "Binabasa ng search ang text sa loob ng mga litrato at ang caption nila. Subukan ang ibang salita, o isang parirala sa loob ng quotes gaya ng “order total”.",
+
+  "empty.title": "Naghihintay ang gallery mo",
+  "empty.body": "Ihulog ang isang screenshot sa itaas, o pindutin ang Ctrl + V para mag-paste. Ifra-frame namin ito at hahanapan ng pader.",
+
+  "notice.nothing": "Walang kailangang suriin. Updated na ang mga ito.",
+  "notice.analyzing": "Sinusuri ang {count} litrato. Lilipat sila sa tamang album pagkatapos.",
+  "notice.confirmReanalyze": "Suriin ulit ang {count} litrato sa \"{album}\"? Ipapadala ulit sa AI ang bawat isa, at baka ilang minuto ito.",
+
+  "modal.summary": "Buod",
+  "modal.text": "Text sa litrato",
+  "modal.tags": "Mga tag",
+  "modal.others": "Iba pang litrato",
+  "modal.noSummary": "Walang buod.",
+  "modal.analyzing": "Sinusuri pa…",
+  "modal.noText": "Walang nakitang text.",
+  "modal.showPasswords": "Ipakita ang password",
+  "modal.hidePasswords": "Itago ang password",
+
+  "settings.title": "Settings",
+  "settings.note": "gawin mong iyo",
+  "settings.back": "Bumalik sa gallery",
+  "settings.account": "Account",
+  "settings.email": "Email",
+  "settings.joined": "Sumali noong",
+  "settings.library": "Library",
+  "settings.libraryValue": "{photos} litrato · {albums} album",
+  "settings.password": "Palitan ang password",
+  "settings.passwordNew": "Bagong password",
+  "settings.passwordSave": "I-update ang password",
+  "settings.passwordSaved": "Na-update ang password",
+  "settings.logout": "Mag-log out",
+  "settings.appearance": "Itsura",
+  "settings.appearanceHint": "Kung paano lumalabas ang Snapzy sa device na ito.",
+  "settings.light": "Maliwanag",
+  "settings.dark": "Madilim",
+  "settings.system": "Sundin ang device",
+  "settings.language": "Wika",
+  "settings.languageHint": "Para sa mga menu at button. Hindi binabago ang caption na isinulat ng AI.",
+  "settings.data": "Ang iyong data",
+  "settings.dataHint": "Hindi na maibabalik ang mga ito.",
+  "settings.clearPhotos": "Burahin lahat ng litrato",
+  "settings.clearPhotosHint": "Buburahin ang bawat litrato, ang text at mga tag nito. Maiiwan ang mga album.",
+  "settings.resetCategories": "I-reset ang mga album",
+  "settings.resetCategoriesHint": "Buburahin ang mga album na ginawa mo at ibabalik ang mga default. Lilipat sa Other ang mga litrato.",
+  "settings.typeToConfirm": "I-type ang DELETE para kumpirmahin",
+  "settings.confirm": "Kumpirmahin",
+  "settings.cancel": "Huwag na",
+  "settings.cleared": "Nabura na lahat ng litrato",
+  "settings.reset": "Na-reset ang mga album",
+  "settings.about": "Tungkol at legal",
+  "settings.aboutLink": "Tungkol sa Snapzy",
+  "settings.terms": "Terms and Conditions",
+  "settings.privacy": "Privacy Policy",
+  "settings.legalNote": "Nasa English ang mga legal na pahina.",
+  "settings.version": "Bersyon {version}",
+};
+
+const dictionaries: Record<Lang, Record<MessageKey, string>> = { en, tl };
+
+export function translate(
+  lang: Lang,
+  key: MessageKey,
+  vars?: Record<string, string | number>,
+): string {
+  const template = dictionaries[lang]?.[key] ?? en[key];
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (_, name) => String(vars[name] ?? `{${name}}`));
+}
+
+export function isLang(value: unknown): value is Lang {
+  return LANGUAGES.some((l) => l.code === value);
+}

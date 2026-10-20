@@ -34,7 +34,7 @@ export default function Home() {
         <Logo />
         <Link
           href="/login"
-          className="rounded-full px-4 py-2 text-sm font-medium text-ink/70 transition hover:bg-white/70 hover:text-ink"
+          className="rounded-full px-4 py-2 text-sm font-medium text-ink/70 transition hover:bg-card/70 hover:text-ink"
         >
           Log in
         </Link>
@@ -64,7 +64,7 @@ export default function Home() {
             </Link>
             <Link
               href="/login"
-              className="rounded-full bg-white/80 px-7 py-3.5 text-sm font-semibold tracking-wide text-brand-deep uppercase shadow-soft ring-1 ring-line backdrop-blur transition hover:-translate-y-0.5 hover:bg-white"
+              className="rounded-full bg-card/80 px-7 py-3.5 text-sm font-semibold tracking-wide text-brand-deep uppercase shadow-soft ring-1 ring-line backdrop-blur transition hover:-translate-y-0.5 hover:bg-card"
             >
               I have an account
             </Link>
@@ -76,7 +76,7 @@ export default function Home() {
           {prints.map((p, i) => (
             <figure
               key={p.caption}
-              className={`absolute ${p.pos} ${p.tilt} w-48 rounded-md bg-white p-2.5 pb-9 shadow-lift transition duration-500 ease-out sm:w-56 ${
+              className={`absolute ${p.pos} ${p.tilt} w-48 rounded-md bg-card p-2.5 pb-9 shadow-lift transition duration-500 ease-out sm:w-56 ${
                 i === 0
                   ? "group-hover:-translate-x-6 group-hover:-rotate-12"
                   : i === 1
@@ -90,7 +90,7 @@ export default function Home() {
               </figcaption>
             </figure>
           ))}
-          <span className="absolute -right-4 -bottom-6 rotate-[-8deg] rounded-full bg-white px-4 py-2 font-hand text-xl text-brand-deep shadow-soft">
+          <span className="absolute -right-4 -bottom-6 rotate-[-8deg] rounded-full bg-card px-4 py-2 font-hand text-xl text-brand-deep shadow-soft">
             sorted by AI ✿
           </span>
         </section>
@@ -105,7 +105,7 @@ export default function Home() {
           {features.map((f, i) => (
             <li
               key={f.title}
-              className="animate-rise rounded-3xl bg-white/85 p-6 shadow-soft ring-1 ring-line backdrop-blur"
+              className="animate-rise rounded-3xl bg-card/85 p-6 shadow-soft ring-1 ring-line backdrop-blur"
               style={{ animationDelay: `${i * 120}ms` }}
             >
               <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand-soft font-hand text-2xl text-brand-deep">

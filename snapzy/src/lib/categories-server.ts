@@ -44,8 +44,17 @@ export async function getUserCategories(
   if (error) throw error;
   if (data.length > 0) return data.map(toUserCategory);
 
+  await seedDefaultCategories(supabase, userId);
+
+  const { data: seeded, error: reloadError } = await selectCategories(supabase);
+  if (reloadError) throw reloadError;
+  return seeded.map(toUserCategory);
+}
+
+/** Adds any missing built-in categories. Existing ones are left alone. */
+export async function seedDefaultCategories(supabase: SupabaseClient, userId: string) {
   // ignoreDuplicates makes two concurrent first visits harmless.
-  const { error: seedError } = await supabase.from("categories").upsert(
+  const { error } = await supabase.from("categories").upsert(
     DEFAULT_CATEGORIES.map((c, i) => ({
       user_id: userId,
       name: c.name,
@@ -56,11 +65,7 @@ export async function getUserCategories(
     })),
     { onConflict: "user_id,name", ignoreDuplicates: true },
   );
-  if (seedError) throw seedError;
-
-  const { data: seeded, error: reloadError } = await selectCategories(supabase);
-  if (reloadError) throw reloadError;
-  return seeded.map(toUserCategory);
+  if (error) throw error;
 }
 
 export function fallbackCategory(categories: UserCategory[]) {

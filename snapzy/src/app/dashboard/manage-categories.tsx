@@ -11,6 +11,7 @@ import {
   MAX_CATEGORY_NAME,
   type UserCategory,
 } from "@/lib/categories";
+import { useT } from "@/components/preferences";
 import { createCategory, deleteCategory, updateCategory } from "./category-actions";
 import { NAV_EVENTS } from "./mobile-nav";
 
@@ -25,6 +26,7 @@ export function ManageCategoriesButton({
   categories: UserCategory[];
   counts: Map<string, number>;
 }) {
+  const t = useT();
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   // The mobile nav's "Albums" tab opens this dialog too.
@@ -39,12 +41,12 @@ export function ManageCategoriesButton({
       <button
         type="button"
         onClick={() => dialogRef.current?.showModal()}
-        className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-4 py-2 text-sm font-medium text-ink/70 shadow-soft ring-1 ring-line transition hover:-translate-y-0.5 hover:text-brand-deep"
+        className="flex shrink-0 items-center gap-1.5 rounded-full bg-card px-4 py-2 text-sm font-medium text-ink/70 shadow-soft ring-1 ring-line transition hover:-translate-y-0.5 hover:text-brand-deep"
       >
         <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h10M4 17h6m4 0h6M18 7h2M14 4v6m-4 4v6" />
         </svg>
-        <span className="hidden sm:inline">Manage</span>
+        <span className="hidden sm:inline">{t("albums.manage")}</span>
       </button>
 
       {/* Native <dialog>: focus trap, Esc to close and backdrop for free. */}
@@ -55,7 +57,7 @@ export function ManageCategoriesButton({
           // Clicking the backdrop (the dialog element itself) closes it.
           if (e.target === dialogRef.current) dialogRef.current.close();
         }}
-        className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-4xl border-0 bg-white p-0 text-ink shadow-lift backdrop:bg-ink/30 backdrop:backdrop-blur-sm"
+        className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-4xl border-0 bg-card p-0 text-ink shadow-lift backdrop:bg-ink/30 backdrop:backdrop-blur-sm"
       >
         <ManageCategoriesPanel
           categories={categories}
@@ -296,7 +298,7 @@ function CategoryForm({
           value={draft.name}
           onChange={(e) => onChange({ ...draft, name: e.target.value })}
           placeholder="e.g. Mobile Legends"
-          className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-mute/70 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30"
+          className="mt-1 w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink placeholder:text-mute/70 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30"
         />
       </label>
       <label className="block">
@@ -308,7 +310,7 @@ function CategoryForm({
           value={draft.description}
           onChange={(e) => onChange({ ...draft, description: e.target.value })}
           placeholder="e.g. Match results, heroes and in-game screenshots"
-          className="mt-1 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink placeholder:text-mute/70 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30"
+          className="mt-1 w-full rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink placeholder:text-mute/70 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30"
         />
       </label>
       <fieldset>
@@ -321,7 +323,7 @@ function CategoryForm({
               onClick={() => onChange({ ...draft, color })}
               aria-label={color}
               aria-pressed={draft.color === color}
-              className={`h-6 w-6 rounded-full ${colorStyles[color].dot} ring-offset-2 ring-offset-white transition ${
+              className={`h-6 w-6 rounded-full ${colorStyles[color].dot} ring-offset-2 ring-offset-card transition ${
                 draft.color === color ? "ring-2 ring-ink" : "hover:scale-110"
               }`}
             />

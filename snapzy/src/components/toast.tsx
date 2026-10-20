@@ -41,7 +41,7 @@ export function Toaster() {
         <div
           key={t.id}
           role="status"
-          className="flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-medium text-white shadow-lift animate-rise"
+          className="flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper shadow-lift animate-rise"
         >
           <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-4 w-4 text-blush">
             <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 5 5 9-10" />

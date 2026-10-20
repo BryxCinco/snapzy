@@ -6,7 +6,7 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
       <WatercolorBackdrop />
 
       {/* Watercolor panel, like the reference's welcome screen. */}
-      <aside className="relative hidden overflow-hidden bg-linear-to-br from-brand via-[#8fb8ec] to-blush p-10 text-white lg:flex lg:flex-col">
+      <aside className="relative hidden overflow-hidden bg-linear-to-br from-brand via-lilac to-blush p-10 text-white lg:flex lg:flex-col">
         <div aria-hidden className="wash animate-drift -top-20 -left-10 h-96 w-96 bg-white/40" />
         <div
           aria-hidden

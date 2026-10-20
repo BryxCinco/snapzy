@@ -1,12 +1,18 @@
 @import "tailwindcss";
 
+/* Dark mode is driven by data-theme on <html> (set before paint by the
+   inline script in layout.tsx), not by the OS media query alone. */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
 /* -----------------------------------------------------------------------------
    Snapzy — "watercolor gallery" theme
    Airy paper background, soft sky-blue accent, watercolor washes in blush and
    lilac, Poppins for UI and Caveat for handwritten notes.
    ----------------------------------------------------------------------------- */
 
-@theme inline {
+/* Colors are plain @theme (not inline) so utilities read the CSS variables
+   and [data-theme=dark] below can swap them. */
+@theme {
   --color-paper: #f6f8fb;
   --color-card: #ffffff;
   --color-ink: #1d2433;
@@ -18,12 +24,14 @@
   --color-blush: #f2c4d3;
   --color-lilac: #c8c2ee;
 
+  --shadow-soft: 0 1px 2px rgb(29 36 51 / 0.04), 0 8px 24px -12px rgb(29 36 51 / 0.18);
+  --shadow-lift: 0 2px 4px rgb(29 36 51 / 0.05), 0 22px 40px -18px rgb(47 134 207 / 0.45);
+}
+
+@theme inline {
   --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
   --font-hand: var(--font-caveat), "Comic Sans MS", cursive;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-
-  --shadow-soft: 0 1px 2px rgb(29 36 51 / 0.04), 0 8px 24px -12px rgb(29 36 51 / 0.18);
-  --shadow-lift: 0 2px 4px rgb(29 36 51 / 0.05), 0 22px 40px -18px rgb(47 134 207 / 0.45);
 
   --animate-drift: drift 22s ease-in-out infinite alternate;
   --animate-rise: rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -44,6 +52,27 @@
 @keyframes draw {
   from { stroke-dashoffset: var(--len, 400); }
   to { stroke-dashoffset: 0; }
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-paper: #10141b;
+  --color-card: #19202b;
+  --color-ink: #e7ecf4;
+  --color-mute: #8e98aa;
+  --color-line: #29313f;
+  --color-brand: #5aaeea;
+  --color-brand-deep: #8ccaf6;
+  --color-brand-soft: #1b2b3d;
+  --color-blush: #6e3b52;
+  --color-lilac: #3d3871;
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.35), 0 22px 40px -18px rgb(90 174 234 / 0.35);
+}
+
+[data-theme="dark"] .paper-grain::after {
+  opacity: 0.12;
+  mix-blend-mode: screen;
 }
 
 body {

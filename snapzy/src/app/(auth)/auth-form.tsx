@@ -43,7 +43,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
         <Logo />
       </div>
 
-      <div className="rounded-4xl bg-white/90 p-8 shadow-lift ring-1 ring-line backdrop-blur sm:p-10">
+      <div className="rounded-4xl bg-card/90 p-8 shadow-lift ring-1 ring-line backdrop-blur sm:p-10">
         <p className="font-hand text-2xl text-brand-deep">{t.note}</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">{t.title}</h1>
         <p className="mt-1 text-sm text-mute">{t.subtitle}</p>
@@ -106,7 +106,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
 }
 
 const INPUT =
-  "w-full rounded-full bg-paper px-5 py-3 text-sm text-ink ring-1 ring-line placeholder:text-mute/70 outline-none transition focus:bg-white focus:ring-2 focus:ring-brand";
+  "w-full rounded-full bg-paper px-5 py-3 text-sm text-ink ring-1 ring-line placeholder:text-mute/70 outline-none transition focus:bg-card focus:ring-2 focus:ring-brand";
 
 function Field({
   label,

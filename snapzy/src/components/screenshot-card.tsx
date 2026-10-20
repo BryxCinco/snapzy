@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { deleteScreenshot, retryProcessing } from "@/app/dashboard/actions";
 import { updateScreenshotCategory } from "@/app/dashboard/category-actions";
+import { useT } from "@/components/preferences";
 import { toast } from "@/components/toast";
 import { copyToClipboard, downloadUrl } from "@/lib/clipboard";
 import {
@@ -60,7 +61,7 @@ const HOVER_REVEAL =
   "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
 
 const ICON_BUTTON =
-  "grid h-8 w-8 place-items-center rounded-full bg-white/90 text-ink/70 shadow-soft backdrop-blur transition hover:scale-110 hover:text-white";
+  "grid h-8 w-8 place-items-center rounded-full bg-card/90 text-ink/70 shadow-soft backdrop-blur transition hover:scale-110 hover:text-white";
 
 // Each print hangs a little crooked, like it was pinned up by hand. Derived
 // from the id so it stays the same across renders.
@@ -82,6 +83,7 @@ export function ScreenshotCard({
   onOpen,
   index = 0,
 }: Props) {
+  const t = useT();
   const [isDeleting, startDelete] = useTransition();
   const [isRetrying, startRetry] = useTransition();
   const [isMoving, startMove] = useTransition();
@@ -124,7 +126,7 @@ export function ScreenshotCard({
   }, [menuOpen]);
 
   function handleDelete() {
-    if (!window.confirm("Are you sure you want to delete this screenshot?")) return;
+    if (!window.confirm(t("card.confirmDelete"))) return;
     setError(null);
     startDelete(async () => {
       const result = await deleteScreenshot(screenshot.id);
@@ -136,7 +138,7 @@ export function ScreenshotCard({
     if (!screenshot.ocrText) return;
     try {
       await copyToClipboard(screenshot.ocrText);
-      toast("Text copied!");
+      toast(t("card.copied"));
     } catch {
       setError("Couldn't copy. Your browser blocked clipboard access.");
     }
@@ -148,7 +150,7 @@ export function ScreenshotCard({
     setError(null);
     startMove(async () => {
       const result = await updateScreenshotCategory(screenshot.id, target.id);
-      if (result.ok) toast(`Moved to ${target.name}`);
+      if (result.ok) toast(t("card.moved", { name: target.name }));
       else setError(result.error);
     });
   }
@@ -220,10 +222,10 @@ export function ScreenshotCard({
         />
 
         {processing && (
-          <div className="absolute inset-0 grid place-items-center bg-white/45 backdrop-blur-[2px]">
-            <div className="flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-brand-deep shadow-soft">
+          <div className="absolute inset-0 grid place-items-center bg-card/45 backdrop-blur-[2px]">
+            <div className="flex items-center gap-2 rounded-full bg-card px-3.5 py-1.5 text-brand-deep shadow-soft">
               <Spinner />
-              <span className="font-hand text-lg leading-none">reading it…</span>
+              <span className="font-hand text-lg leading-none">{t("card.reading")}</span>
             </div>
           </div>
         )}
@@ -240,7 +242,7 @@ export function ScreenshotCard({
           className={`absolute top-2.5 left-2.5 grid h-7 w-7 place-items-center rounded-full shadow-soft transition focus-visible:opacity-100 ${
             selected
               ? "scale-110 bg-brand text-white"
-              : "bg-white/90 text-transparent ring-1 ring-line hover:text-brand"
+              : "bg-card/90 text-transparent ring-1 ring-line hover:text-brand"
           } ${selected || selectionMode ? "opacity-100" : HOVER_REVEAL}`}
         >
           <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="h-4 w-4">
@@ -313,9 +315,9 @@ export function ScreenshotCard({
           ref={menuRef}
           role="menu"
           aria-label="Move to album"
-          className="absolute top-13 right-3 z-30 max-h-72 w-56 overflow-y-auto rounded-2xl bg-white p-1.5 shadow-lift ring-1 ring-line"
+          className="absolute top-13 right-3 z-30 max-h-72 w-56 overflow-y-auto rounded-2xl bg-card p-1.5 shadow-lift ring-1 ring-line"
         >
-          <p className="px-3 pt-1.5 pb-1 font-hand text-lg text-mute">move to…</p>
+          <p className="px-3 pt-1.5 pb-1 font-hand text-lg text-mute">{t("card.moveTo")}</p>
           {categories.map((c) => {
             const current = c.id === screenshot.categoryId;
             return (
@@ -354,9 +356,9 @@ export function ScreenshotCard({
                 {category.name}
               </span>
             ) : processing ? (
-              "Sorting…"
+              t("card.sorting")
             ) : (
-              "Unsorted"
+              t("albums.unsorted")
             )}
             <span className="text-mute/60"> · {dateFormat.format(new Date(screenshot.createdAt))}</span>
           </p>
@@ -366,7 +368,7 @@ export function ScreenshotCard({
               onClick={() => onOpen(screenshot.id)}
               className="shrink-0 rounded-full bg-brand px-3 py-1 text-[10px] font-semibold tracking-wider text-white uppercase shadow-soft transition hover:bg-brand-deep [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
             >
-              View
+              {t("action.view")}
             </button>
           )}
         </div>
@@ -396,16 +398,16 @@ export function ScreenshotCard({
         {canRetry && !processing && (
           <div className="mt-2 flex items-center justify-between gap-2 rounded-2xl bg-red-50 px-3 py-2">
             <p className="text-xs text-red-600">
-              {screenshot.stuck ? "Took too long." : "Couldn't read this one."}
+              {screenshot.stuck ? t("card.tooLong") : t("card.failed")}
             </p>
             <button
               type="button"
               onClick={handleRetry}
               disabled={isRetrying}
-              className="flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-red-600 shadow-soft transition hover:bg-red-100 disabled:opacity-60"
+              className="flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-xs font-semibold text-red-600 shadow-soft transition hover:bg-red-100 disabled:opacity-60"
             >
               {isRetrying && <Spinner />}
-              {screenshot.summary ? "Retry" : "Run AI"}
+              {screenshot.summary ? t("action.retry") : t("action.runAi")}
             </button>
           </div>
         )}

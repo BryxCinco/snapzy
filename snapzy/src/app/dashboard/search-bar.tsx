@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { useT } from "@/components/preferences";
 import { NAV_EVENTS } from "./mobile-nav";
 
 const DEBOUNCE_MS = 300;
@@ -10,6 +11,7 @@ const DEBOUNCE_MS = 300;
 // reads the same param, so the two stay in sync without shared state, and
 // a search keeps its own URL (shareable, survives refresh).
 export function SearchBar() {
+  const t = useT();
   const searchParams = useSearchParams();
   const urlQuery = searchParams.get("q") ?? "";
   const [value, setValue] = useState(urlQuery);
@@ -73,10 +75,10 @@ export function SearchBar() {
             inputRef.current?.blur();
           }
         }}
-        placeholder="Find anything in your photos…"
+        placeholder={t("nav.search")}
         aria-label="Search screenshots"
         enterKeyHint="search"
-        className="h-11 w-full rounded-full bg-paper pr-11 pl-11 text-sm text-ink ring-1 ring-line placeholder:text-mute/80 outline-none transition focus:bg-white focus:shadow-soft focus:ring-2 focus:ring-brand [&::-webkit-search-cancel-button]:hidden"
+        className="h-11 w-full rounded-full bg-paper pr-11 pl-11 text-sm text-ink ring-1 ring-line placeholder:text-mute/80 outline-none transition focus:bg-card focus:shadow-soft focus:ring-2 focus:ring-brand [&::-webkit-search-cancel-button]:hidden"
       />
       {value ? (
         <button
@@ -93,7 +95,7 @@ export function SearchBar() {
           </svg>
         </button>
       ) : (
-        <kbd className="pointer-events-none absolute top-1/2 right-3.5 hidden -translate-y-1/2 rounded-md bg-white px-1.5 font-mono text-[10px] text-mute ring-1 ring-line sm:block">
+        <kbd className="pointer-events-none absolute top-1/2 right-3.5 hidden -translate-y-1/2 rounded-md bg-card px-1.5 font-mono text-[10px] text-mute ring-1 ring-line sm:block">
           /
         </kbd>
       )}
