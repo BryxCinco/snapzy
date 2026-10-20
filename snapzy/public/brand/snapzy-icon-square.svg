@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2f7fcf"/>
+      <stop offset="0.42" stop-color="#5b74d3"/>
+      <stop offset="0.72" stop-color="#8e6fc4"/>
+      <stop offset="1" stop-color="#bd7095"/>
+    </linearGradient>
+    <radialGradient id="shine" cx="0.12" cy="0.05" r="0.9">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.32"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9fd0f4"/>
+      <stop offset="1" stop-color="#eaf4fc"/>
+    </linearGradient>
+    <linearGradient id="hillBack" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c8c2ee"/>
+      <stop offset="1" stop-color="#a99fe6"/>
+    </linearGradient>
+    <linearGradient id="hillFront" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4fa3e3"/>
+      <stop offset="1" stop-color="#2f86cf"/>
+    </linearGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="70"/>
+    </filter>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="26" stdDeviation="30" flood-color="#1d2a5c" flood-opacity="0.38"/>
+    </filter>
+    <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="win"><rect x="327.0" y="298.0" width="370" height="380" rx="16"/></clipPath>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <!-- watercolor washes -->
+  <circle cx="860" cy="880" r="300" fill="#f2c4d3" opacity="0.55" filter="url(#soft)"/>
+  <circle cx="900" cy="140" r="220" fill="#c8c2ee" opacity="0.45" filter="url(#soft)"/>
+  <circle cx="120" cy="900" r="240" fill="#4fa3e3" opacity="0.5" filter="url(#soft)"/>
+  <rect width="1024" height="1024" fill="url(#shine)"/>
+
+  <!-- the pile: two prints behind, one in front -->
+  <g transform="translate(512 548) scale(1.12) translate(-512 -548)">
+  <g transform="rotate(-15 512 560)" filter="url(#shadow)">
+    <rect x="297.0" y="268.0" width="430" height="520" rx="30" fill="#ffffff" opacity="0.5"/>
+  </g>
+  <g transform="rotate(11 512 560)" filter="url(#shadow)">
+    <rect x="297.0" y="268.0" width="430" height="520" rx="30" fill="#ffffff" opacity="0.75"/>
+  </g>
+  <g transform="rotate(-4 512 560)" filter="url(#shadow)">
+    <rect x="297.0" y="268.0" width="430" height="520" rx="30" fill="#fcfdfe"/>
+    <g clip-path="url(#win)">
+      <rect x="327.0" y="298.0" width="370" height="380" fill="url(#sky)"/>
+      <circle cx="586.0" cy="418.0" r="52" fill="#f2c4d3"/>
+      <circle cx="586.0" cy="418.0" r="80" fill="#f2c4d3" opacity="0.35"/>
+      <path d="M317.0,598.0 C397.0,508.0 477.0,503.0 557.0,563.0
+               C617.0,528.0 667.0,523.0 707.0,568.0
+               L707.0,688.0 L317.0,688.0 Z" fill="url(#hillBack)"/>
+      <path d="M317.0,638.0 C417.0,568.0 527.0,588.0 597.0,618.0
+               C647.0,598.0 677.0,594.0 707.0,608.0
+               L707.0,688.0 L317.0,688.0 Z" fill="url(#hillFront)"/>
+    </g>
+    <!-- handwritten caption squiggle -->
+    <path d="M417.0,730.0 c22,-20 40,20 62,0 s40,20 62,0 s40,20 62,0"
+          fill="none" stroke="#2f86cf" stroke-width="12" stroke-linecap="round" opacity="0.8"/>
+  </g>
+  </g>
+
+  <!-- AI sparkles -->
+  <g filter="url(#glow)" fill="#ffffff">
+    <path d="M808,116 C829.56,192.44 829.56,192.44 906,214 C829.56,235.56 829.56,235.56 808,312 C786.44,235.56 786.44,235.56 710,214 C786.44,192.44 786.44,192.44 808,116 Z"/>
+    <path d="M910,320 C918.8,351.2 918.8,351.2 950,360 C918.8,368.8 918.8,368.8 910,400 C901.2,368.8 901.2,368.8 870,360 C901.2,351.2 901.2,351.2 910,320 Z" opacity="0.9"/>
+    <path d="M170,180 C176.6,203.4 176.6,203.4 200,210 C176.6,216.6 176.6,216.6 170,240 C163.4,216.6 163.4,216.6 140,210 C163.4,203.4 163.4,203.4 170,180 Z" opacity="0.75"/>
+  </g>
+</svg>

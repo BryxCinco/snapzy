@@ -49,13 +49,15 @@ export function Logo({ href = "/", tone = "brand" }: { href?: string; tone?: "br
         tone === "white" ? "text-white" : "text-ink"
       }`}
     >
-      <span className="relative grid h-9 w-9 place-items-center overflow-hidden rounded-xl bg-linear-to-br from-brand via-lilac to-blush text-sm font-bold text-white shadow-soft transition duration-300 group-hover:rotate-6">
-        <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} className="h-4.5 w-4.5">
-          <rect x="3" y="5" width="18" height="15" rx="3" />
-          <circle cx="12" cy="12.5" r="3.5" />
-          <path strokeLinecap="round" d="M8 5l1.5-2h5L16 5" />
-        </svg>
-      </span>
+      {/* The app icon (public/brand), same art as the favicon and home-screen icon. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/brand/snapzy-icon.svg"
+        alt=""
+        width={36}
+        height={36}
+        className="h-9 w-9 drop-shadow-[0_4px_10px_rgb(47_80_160/0.3)] transition duration-300 group-hover:scale-105 group-hover:rotate-6"
+      />
       <span className={`text-lg ${tone === "white" ? "" : "text-brand-deep"}`}>Snapzy</span>
     </Link>
   );
