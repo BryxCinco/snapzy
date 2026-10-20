@@ -38,23 +38,24 @@ export function toCategoryColor(value: unknown): CategoryColor {
 }
 
 // Full class strings (not built at runtime) so Tailwind can see them.
-export const colorStyles: Record<CategoryColor, { badge: string; dot: string }> = {
-  pink: { badge: "bg-pink-500/15 text-pink-300 ring-pink-500/30", dot: "bg-pink-400" },
-  rose: { badge: "bg-rose-500/15 text-rose-300 ring-rose-500/30", dot: "bg-rose-400" },
-  red: { badge: "bg-red-500/15 text-red-300 ring-red-500/30", dot: "bg-red-400" },
-  orange: { badge: "bg-orange-500/15 text-orange-300 ring-orange-500/30", dot: "bg-orange-400" },
-  amber: { badge: "bg-amber-500/15 text-amber-300 ring-amber-500/30", dot: "bg-amber-400" },
-  yellow: { badge: "bg-yellow-500/15 text-yellow-300 ring-yellow-500/30", dot: "bg-yellow-400" },
-  lime: { badge: "bg-lime-500/15 text-lime-300 ring-lime-500/30", dot: "bg-lime-400" },
-  emerald: { badge: "bg-emerald-500/15 text-emerald-300 ring-emerald-500/30", dot: "bg-emerald-400" },
-  teal: { badge: "bg-teal-500/15 text-teal-300 ring-teal-500/30", dot: "bg-teal-400" },
-  cyan: { badge: "bg-cyan-500/15 text-cyan-300 ring-cyan-500/30", dot: "bg-cyan-400" },
-  sky: { badge: "bg-sky-500/15 text-sky-300 ring-sky-500/30", dot: "bg-sky-400" },
-  blue: { badge: "bg-blue-500/15 text-blue-300 ring-blue-500/30", dot: "bg-blue-400" },
-  indigo: { badge: "bg-indigo-500/15 text-indigo-300 ring-indigo-500/30", dot: "bg-indigo-400" },
-  violet: { badge: "bg-violet-500/15 text-violet-300 ring-violet-500/30", dot: "bg-violet-400" },
-  fuchsia: { badge: "bg-fuchsia-500/15 text-fuchsia-300 ring-fuchsia-500/30", dot: "bg-fuchsia-400" },
-  zinc: { badge: "bg-zinc-500/15 text-zinc-300 ring-zinc-500/30", dot: "bg-zinc-400" },
+// `wash` tints album covers and empty states.
+export const colorStyles: Record<CategoryColor, { badge: string; dot: string; wash: string }> = {
+  pink: { badge: "bg-pink-50 text-pink-600 ring-pink-200", dot: "bg-pink-400", wash: "bg-pink-200" },
+  rose: { badge: "bg-rose-50 text-rose-600 ring-rose-200", dot: "bg-rose-400", wash: "bg-rose-200" },
+  red: { badge: "bg-red-50 text-red-600 ring-red-200", dot: "bg-red-400", wash: "bg-red-200" },
+  orange: { badge: "bg-orange-50 text-orange-600 ring-orange-200", dot: "bg-orange-400", wash: "bg-orange-200" },
+  amber: { badge: "bg-amber-50 text-amber-700 ring-amber-200", dot: "bg-amber-400", wash: "bg-amber-200" },
+  yellow: { badge: "bg-yellow-50 text-yellow-700 ring-yellow-200", dot: "bg-yellow-400", wash: "bg-yellow-200" },
+  lime: { badge: "bg-lime-50 text-lime-700 ring-lime-200", dot: "bg-lime-400", wash: "bg-lime-200" },
+  emerald: { badge: "bg-emerald-50 text-emerald-600 ring-emerald-200", dot: "bg-emerald-400", wash: "bg-emerald-200" },
+  teal: { badge: "bg-teal-50 text-teal-600 ring-teal-200", dot: "bg-teal-400", wash: "bg-teal-200" },
+  cyan: { badge: "bg-cyan-50 text-cyan-600 ring-cyan-200", dot: "bg-cyan-400", wash: "bg-cyan-200" },
+  sky: { badge: "bg-sky-50 text-sky-600 ring-sky-200", dot: "bg-sky-400", wash: "bg-sky-200" },
+  blue: { badge: "bg-blue-50 text-blue-600 ring-blue-200", dot: "bg-blue-400", wash: "bg-blue-200" },
+  indigo: { badge: "bg-indigo-50 text-indigo-600 ring-indigo-200", dot: "bg-indigo-400", wash: "bg-indigo-200" },
+  violet: { badge: "bg-violet-50 text-violet-600 ring-violet-200", dot: "bg-violet-400", wash: "bg-violet-200" },
+  fuchsia: { badge: "bg-fuchsia-50 text-fuchsia-600 ring-fuchsia-200", dot: "bg-fuchsia-400", wash: "bg-fuchsia-200" },
+  zinc: { badge: "bg-zinc-50 text-zinc-600 ring-zinc-200", dot: "bg-zinc-400", wash: "bg-zinc-200" },
 };
 
 export const MAX_CATEGORY_NAME = 40;

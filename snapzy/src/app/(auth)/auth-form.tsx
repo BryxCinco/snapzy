@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { Logo } from "@/components/watercolor";
 import { login, signup, type AuthState } from "./actions";
 
 type Mode = "login" | "signup";
 
 const copy = {
   login: {
+    note: "good to see you again",
     title: "Welcome back",
     subtitle: "Log in to your Snapzy library",
     submit: "Log in",
@@ -17,6 +19,7 @@ const copy = {
     switchHref: "/signup",
   },
   signup: {
+    note: "let's start your gallery",
     title: "Create your account",
     subtitle: "Start organizing screenshots with AI",
     submit: "Create account",
@@ -35,28 +38,18 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const t = copy[mode];
 
   return (
-    <div className="w-full max-w-sm">
-      <Link
-        href="/"
-        className="mb-8 flex items-center justify-center gap-2 text-lg font-semibold tracking-tight text-zinc-100"
-      >
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-linear-to-br from-violet-500 to-cyan-400 text-sm font-bold text-zinc-950">
-          S
-        </span>
-        Snapzy
-      </Link>
+    <div className="w-full max-w-sm animate-rise">
+      <div className="mb-8 flex justify-center lg:hidden">
+        <Logo />
+      </div>
 
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-8 shadow-2xl shadow-black/40 backdrop-blur">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">
-          {t.title}
-        </h1>
-        <p className="mt-1 text-sm text-zinc-400">{t.subtitle}</p>
+      <div className="rounded-4xl bg-white/90 p-8 shadow-lift ring-1 ring-line backdrop-blur sm:p-10">
+        <p className="font-hand text-2xl text-brand-deep">{t.note}</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">{t.title}</h1>
+        <p className="mt-1 text-sm text-mute">{t.subtitle}</p>
 
-        <form action={formAction} className="mt-6 space-y-4">
-          <div className="space-y-1.5">
-            <label htmlFor="email" className="text-sm font-medium text-zinc-300">
-              Email
-            </label>
+        <form action={formAction} className="mt-8 space-y-4">
+          <Field label="Email" htmlFor="email">
             <input
               id="email"
               name="email"
@@ -64,17 +57,11 @@ export function AuthForm({ mode }: { mode: Mode }) {
               autoComplete="email"
               required
               placeholder="you@example.com"
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/30"
+              className={INPUT}
             />
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <label
-              htmlFor="password"
-              className="text-sm font-medium text-zinc-300"
-            >
-              Password
-            </label>
+          <Field label="Password" htmlFor="password">
             <input
               id="password"
               name="password"
@@ -83,23 +70,17 @@ export function AuthForm({ mode }: { mode: Mode }) {
               required
               minLength={6}
               placeholder="••••••••"
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/30"
+              className={INPUT}
             />
-          </div>
+          </Field>
 
           {state.error && (
-            <p
-              role="alert"
-              className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300"
-            >
+            <p role="alert" className="rounded-2xl bg-red-50 px-4 py-2.5 text-sm text-red-600 ring-1 ring-red-100">
               {state.error}
             </p>
           )}
           {state.message && (
-            <p
-              role="status"
-              className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-300"
-            >
+            <p role="status" className="rounded-2xl bg-emerald-50 px-4 py-2.5 text-sm text-emerald-700 ring-1 ring-emerald-100">
               {state.message}
             </p>
           )}
@@ -107,22 +88,41 @@ export function AuthForm({ mode }: { mode: Mode }) {
           <button
             type="submit"
             disabled={pending}
-            className="w-full rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-2 w-full rounded-full bg-brand px-4 py-3.5 text-sm font-semibold tracking-wide text-white uppercase shadow-lift transition hover:-translate-y-0.5 hover:bg-brand-deep disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {pending ? t.pending : t.submit}
           </button>
         </form>
       </div>
 
-      <p className="mt-6 text-center text-sm text-zinc-400">
+      <p className="mt-6 text-center text-sm text-mute">
         {t.switchText}{" "}
-        <Link
-          href={t.switchHref}
-          className="font-medium text-violet-400 hover:text-violet-300"
-        >
+        <Link href={t.switchHref} className="font-semibold text-brand-deep hover:underline">
           {t.switchLabel}
         </Link>
       </p>
+    </div>
+  );
+}
+
+const INPUT =
+  "w-full rounded-full bg-paper px-5 py-3 text-sm text-ink ring-1 ring-line placeholder:text-mute/70 outline-none transition focus:bg-white focus:ring-2 focus:ring-brand";
+
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={htmlFor} className="pl-4 text-xs font-medium tracking-wide text-mute uppercase">
+        {label}
+      </label>
+      {children}
     </div>
   );
 }

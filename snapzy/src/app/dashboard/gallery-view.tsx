@@ -51,7 +51,7 @@ function buildAlbums(cards: ScreenshotCardData[], categories: UserCategory[]): A
     {
       key: "all",
       label: "All photos",
-      dot: "bg-linear-to-br from-violet-400 to-cyan-300",
+      dot: "bg-linear-to-br from-brand to-blush",
       cards,
     },
     ...categories.map((c) => ({
@@ -63,7 +63,7 @@ function buildAlbums(cards: ScreenshotCardData[], categories: UserCategory[]): A
   ];
   const unsorted = byKey.get("unsorted");
   if (unsorted) {
-    albums.push({ key: "unsorted", label: "Unsorted", dot: "bg-zinc-600", cards: unsorted });
+    albums.push({ key: "unsorted", label: "Unsorted", dot: "bg-mute", cards: unsorted });
   }
   return albums;
 }
@@ -300,19 +300,18 @@ export function GalleryView({
       {notice && (
         <p
           role="status"
-          className="mb-4 rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-300"
+          className="mb-6 flex items-center gap-3 rounded-3xl bg-white px-5 py-3 text-sm text-ink/80 shadow-soft ring-1 ring-line"
         >
+          <span aria-hidden className="font-hand text-2xl leading-none text-brand">✿</span>
           {notice}
         </p>
       )}
 
       {cards.length === 0 ? (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 px-6 py-16 text-center">
-          <p className="font-medium text-zinc-200">No photos yet</p>
-          <p className="mt-1 text-sm text-zinc-500">
-            Drop one above or press Ctrl + V to paste from your clipboard.
-          </p>
-        </div>
+        <EmptyState
+          title="Your gallery is waiting"
+          body="Drop a screenshot in the box above, or press Ctrl + V to paste one. We'll frame it and find it a wall."
+        />
       ) : searching ? (
         <SearchResults
           {...cardProps}
@@ -343,14 +342,14 @@ export function GalleryView({
       )}
 
       {selectionMode && (
-        <div className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-4">
+        <div className="fixed inset-x-0 bottom-24 z-40 flex justify-center px-4 sm:bottom-6">
           <div
             role="toolbar"
             aria-label="Selection actions"
-            className="flex flex-wrap items-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-900/95 px-4 py-3 shadow-2xl shadow-black/60 backdrop-blur"
+            className="animate-rise flex flex-wrap items-center gap-2 rounded-full bg-white/95 py-2 pr-2 pl-5 shadow-lift ring-1 ring-line backdrop-blur-xl"
           >
-            <span className="pr-2 text-sm font-medium text-zinc-100">
-              {selected.length} selected
+            <span className="pr-2 text-sm font-semibold text-ink">
+              <span className="font-hand text-2xl text-brand-deep">{selected.length}</span> picked
             </span>
             <button
               type="button"
@@ -361,28 +360,31 @@ export function GalleryView({
                   ? "All selected photos are already analyzed. Use Re-analyze."
                   : undefined
               }
-              className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-xs font-semibold tracking-wide text-white uppercase shadow-soft transition hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isAnalyzing && <Spinner />}
               Analyze selected
               {eligibleSelected > 0 && (
-                <span className="text-xs text-violet-200">({eligibleSelected})</span>
+                <span className="text-white/75">({eligibleSelected})</span>
               )}
             </button>
             <button
               type="button"
               onClick={() => analyze(selected.map((c) => c.id), true)}
               disabled={isAnalyzing}
-              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 disabled:opacity-50"
+              className="rounded-full bg-brand-soft px-4 py-2 text-xs font-semibold tracking-wide text-brand-deep uppercase transition hover:bg-brand/20 disabled:opacity-50"
             >
               Re-analyze
             </button>
             <button
               type="button"
               onClick={() => setSelectedIds(new Set())}
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:text-zinc-100"
+              aria-label="Clear selection"
+              className="grid h-9 w-9 place-items-center rounded-full text-mute transition hover:bg-paper hover:text-ink"
             >
-              Clear selection
+              <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                <path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" />
+              </svg>
             </button>
           </div>
         </div>
@@ -391,7 +393,7 @@ export function GalleryView({
   );
 }
 
-// Sticky chip bar under the header: "Albums" home, a chip per non-empty
+// Sticky pill bar under the header: "Albums" home, a chip per non-empty
 // album, and "Manage" for editing categories.
 function AlbumSwitcher({
   albums,
@@ -414,18 +416,18 @@ function AlbumSwitcher({
   const homeActive = openKey === null || (searching && openKey === "all");
 
   const chip = (active: boolean) =>
-    `flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition ${
+    `flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition ${
       active
-        ? "bg-zinc-100 text-zinc-950"
-        : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+        ? "bg-brand text-white shadow-lift"
+        : "bg-white/80 text-ink/70 ring-1 ring-line hover:-translate-y-0.5 hover:bg-white hover:text-ink"
     }`;
 
   return (
     <nav
       aria-label="Albums"
-      className="sticky top-16 z-20 -mx-4 mb-6 flex items-center gap-1 border-b border-zinc-800 bg-zinc-950/85 px-4 backdrop-blur sm:-mx-6 sm:px-6"
+      className="sticky top-16 z-20 -mx-4 mb-6 flex items-center gap-2 bg-paper/80 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6"
     >
-      <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto py-2 scrollbar-none">
+      <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 scrollbar-none">
         <button
           type="button"
           aria-current={homeActive ? "page" : undefined}
@@ -443,16 +445,15 @@ function AlbumSwitcher({
           ) : (
             <>
               <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
-                <rect x="3" y="3" width="7" height="7" rx="1.5" />
-                <rect x="14" y="3" width="7" height="7" rx="1.5" />
-                <rect x="3" y="14" width="7" height="7" rx="1.5" />
-                <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                <rect x="3" y="3" width="7" height="7" rx="2" />
+                <rect x="14" y="3" width="7" height="7" rx="2" />
+                <rect x="3" y="14" width="7" height="7" rx="2" />
+                <rect x="14" y="14" width="7" height="7" rx="2" />
               </svg>
               Albums
             </>
           )}
         </button>
-        <span aria-hidden className="mx-1 my-2 w-px shrink-0 bg-zinc-800" />
         {chips.map((a) => (
           <button
             key={a.key}
@@ -461,18 +462,42 @@ function AlbumSwitcher({
             onClick={() => onOpen(a.key)}
             className={chip(openKey === a.key)}
           >
+            {openKey !== a.key && <span aria-hidden className={`h-2 w-2 rounded-full ${a.dot}`} />}
             <span className="max-w-40 truncate">{a.label}</span>
-            <span className={`text-xs tabular-nums ${openKey === a.key ? "text-zinc-500" : "text-zinc-600"}`}>
+            <span className={`text-xs tabular-nums ${openKey === a.key ? "text-white/75" : "text-mute"}`}>
               {a.cards.length}
             </span>
           </button>
         ))}
       </div>
-      <span aria-hidden className="my-2 w-px self-stretch bg-zinc-800" />
       {manage}
     </nav>
   );
 }
+
+function SectionHeader({
+  title,
+  note,
+  children,
+}: {
+  title: React.ReactNode;
+  note?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div className="min-w-0">
+        {note && <p className="font-hand text-xl leading-none text-brand-deep">{note}</p>}
+        <h2 className="mt-1 truncate text-lg font-semibold tracking-tight text-ink sm:text-xl">{title}</h2>
+      </div>
+      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
+    </div>
+  );
+}
+
+const PILL =
+  "flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold tracking-wide uppercase transition disabled:opacity-50";
+const PILL_GHOST = `${PILL} bg-white text-ink/70 shadow-soft ring-1 ring-line hover:text-brand-deep`;
 
 function DownloadZipLink({ albumKey, count }: { albumKey: AlbumKey; count: number }) {
   return (
@@ -480,12 +505,12 @@ function DownloadZipLink({ albumKey, count }: { albumKey: AlbumKey; count: numbe
       href={`/dashboard/download?album=${encodeURIComponent(albumKey)}`}
       download
       title={`Download ${count} photo${count === 1 ? "" : "s"} as a ZIP`}
-      className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500"
+      className={PILL_GHOST}
     >
-      <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
+      <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-3.5 w-3.5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" />
       </svg>
-      <span className="hidden sm:inline">Download</span> ZIP
+      ZIP
     </a>
   );
 }
@@ -506,30 +531,24 @@ function AlbumGrid({
   const filled = albums.filter((a) => a.cards.length > 0);
   const empty = albums.filter((a) => a.cards.length === 0);
   const all = albums.find((a) => a.key === "all");
+  const albumCount = filled.length - 1;
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-zinc-500">
-          {filled.length - 1} album{filled.length - 1 === 1 ? "" : "s"}
-        </p>
-        <div className="flex items-center gap-2">
-          {all && <DownloadZipLink albumKey="all" count={all.cards.length} />}
-          <button
-            type="button"
-            onClick={onReanalyzeAll}
-            disabled={isAnalyzing}
-            className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 disabled:opacity-60"
-          >
-            {isAnalyzing && <Spinner />}
-            Re-analyze all
-          </button>
-        </div>
-      </div>
+      <SectionHeader
+        note="your walls"
+        title={`${albumCount} album${albumCount === 1 ? "" : "s"}`}
+      >
+        {all && <DownloadZipLink albumKey="all" count={all.cards.length} />}
+        <button type="button" onClick={onReanalyzeAll} disabled={isAnalyzing} className={PILL_GHOST}>
+          {isAnalyzing && <Spinner />}
+          Re-analyze all
+        </button>
+      </SectionHeader>
 
-      <ul className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
-        {[...filled, ...empty].map((album) => (
-          <li key={album.key}>
+      <ul className="grid grid-cols-2 gap-x-5 gap-y-9 sm:grid-cols-3 lg:grid-cols-4">
+        {[...filled, ...empty].map((album, i) => (
+          <li key={album.key} className="animate-rise" style={{ animationDelay: `${Math.min(i, 12) * 50}ms` }}>
             <AlbumCard album={album} onOpen={() => onOpen(album.key)} />
           </li>
         ))}
@@ -538,8 +557,16 @@ function AlbumGrid({
   );
 }
 
+// Up to three photos stacked like prints on a table; they fan out on hover.
+const STACK = [
+  "rotate-[-7deg] group-hover:-translate-x-[14%] group-hover:rotate-[-13deg]",
+  "rotate-[5deg] group-hover:translate-x-[14%] group-hover:rotate-[11deg]",
+  "rotate-0 group-hover:-translate-y-[6%] group-hover:scale-[1.03]",
+];
+
 function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
-  const covers = album.cards.slice(0, 4);
+  // Last one drawn ends up on top, so the newest photo is the cover.
+  const covers = album.cards.slice(0, 3).reverse();
   const analyzing = album.cards.filter(isProcessing).length;
   const isEmpty = album.cards.length === 0;
 
@@ -550,73 +577,63 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
       disabled={isEmpty}
       className="group block w-full text-left outline-none disabled:cursor-default"
     >
-      <div
-        className={`relative aspect-square overflow-hidden rounded-2xl border transition group-focus-visible:ring-2 group-focus-visible:ring-violet-500/60 ${
-          isEmpty
-            ? "border-dashed border-zinc-800 bg-zinc-950"
-            : "border-zinc-800 bg-zinc-900 group-hover:border-zinc-600"
-        }`}
-      >
+      <div className="relative aspect-square">
         {isEmpty ? (
-          <div className="grid h-full place-items-center px-4 text-center text-xs text-zinc-600">
-            No photos yet
+          <div
+            className="sketch-border grid h-full place-items-center rounded-3xl bg-white/50 px-4 text-center"
+            style={{ ["--c" as string]: "#c9d6e4" }}
+          >
+            <p className="font-hand text-xl text-mute">an empty wall,
+              <br />
+              waiting for its first print
+            </p>
           </div>
         ) : (
-          <>
-            <Collage cards={covers} />
-            <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/50 via-transparent to-transparent opacity-0 transition group-hover:opacity-100" />
-          </>
+          covers.map((c, i) => {
+            const slot = STACK[i + (3 - covers.length)];
+            return (
+              <div
+                key={c.id}
+                className={`absolute inset-[7%] rounded-2xl bg-white p-1.5 pb-5 shadow-lift ring-1 ring-line/60 transition duration-500 ease-out ${slot}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={c.url}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full rounded-xl object-cover"
+                />
+              </div>
+            );
+          })
         )}
-        {album.cards.length > covers.length && (
-          <span className="absolute right-2 bottom-2 rounded-full bg-zinc-950/80 px-2 py-0.5 text-xs font-medium text-zinc-200 ring-1 ring-white/10 backdrop-blur">
-            +{album.cards.length - covers.length}
+        {album.cards.length > 3 && (
+          <span className="absolute right-1 bottom-1 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-brand-deep shadow-soft ring-1 ring-line">
+            +{album.cards.length - 3}
           </span>
         )}
         {analyzing > 0 && (
-          <span className="absolute top-2 left-2 flex items-center gap-1.5 rounded-full bg-zinc-950/80 px-2 py-0.5 text-xs font-medium text-zinc-200 ring-1 ring-white/10 backdrop-blur">
+          <span className="absolute top-1 left-1 flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-brand-deep shadow-soft">
             <Spinner />
             {analyzing}
           </span>
         )}
       </div>
-      <div className="mt-2 flex items-center gap-2">
-        <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${album.dot}`} />
-        <p className={`truncate font-medium ${isEmpty ? "text-zinc-500" : "text-zinc-100"}`}>
+      <div className="mt-3 flex items-center gap-2 px-1">
+        <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${album.dot}`} />
+        <p
+          className={`truncate font-semibold transition group-hover:text-brand-deep ${
+            isEmpty ? "text-mute" : "text-ink"
+          }`}
+        >
           {album.label}
         </p>
       </div>
-      <p className="mt-0.5 text-sm text-zinc-500">
+      <p className="mt-0.5 px-1 text-xs text-mute">
         {album.cards.length} photo{album.cards.length === 1 ? "" : "s"}
       </p>
     </button>
-  );
-}
-
-// 1 → full, 2 → side by side, 3 → one tall + two stacked, 4 → 2×2.
-function Collage({ cards }: { cards: ScreenshotCardData[] }) {
-  const layout =
-    cards.length === 1
-      ? "grid-cols-1 grid-rows-1"
-      : cards.length === 2
-        ? "grid-cols-2 grid-rows-1"
-        : "grid-cols-2 grid-rows-2";
-
-  return (
-    <div className={`grid h-full w-full gap-0.5 ${layout}`}>
-      {cards.map((c, i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={c.id}
-          src={c.url}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          className={`h-full w-full object-cover transition duration-500 ease-out group-hover:scale-105 ${
-            cards.length === 3 && i === 0 ? "row-span-2" : ""
-          }`}
-        />
-      ))}
-    </div>
   );
 }
 
@@ -643,9 +660,10 @@ function CardGrid({
         dimmed ? "opacity-50" : ""
       }`}
     >
-      {cards.map((card) => (
+      {cards.map((card, i) => (
         <ScreenshotCard
           key={card.id}
+          index={i}
           screenshot={card}
           categories={categories}
           selected={selectedIds.has(card.id)}
@@ -677,44 +695,39 @@ function AlbumDetail({
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={onBack}
             aria-label="Back to albums"
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-zinc-800 text-zinc-300 transition hover:border-zinc-600 hover:text-white"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white text-ink/70 shadow-soft ring-1 ring-line transition hover:-translate-x-0.5 hover:text-brand-deep"
           >
             <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 18l-6-6 6-6" />
             </svg>
           </button>
           <div className="min-w-0">
-            <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-zinc-100">
-              <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${album.dot}`} />
-              <span className="truncate">{album.label}</span>
-            </h2>
-            <p className="text-sm text-zinc-500">
-              {album.cards.length} photo{album.cards.length === 1 ? "" : "s"}
-              {album.key === "unsorted" && " · still analyzing or need re-analysis"}
+            <p className="font-hand text-xl leading-none text-brand-deep">
+              {album.key === "unsorted" ? "still finding a home" : "on this wall"}
             </p>
+            <h2 className="mt-1 flex items-center gap-2 text-xl font-semibold tracking-tight text-ink sm:text-2xl">
+              <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full ${album.dot}`} />
+              <span className="truncate">{album.label}</span>
+              <span className="text-base font-normal text-mute">{album.cards.length}</span>
+            </h2>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => onSelectAll(album.cards.map((c) => c.id), !allSelected)}
-            className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-900"
+            className={PILL_GHOST}
           >
             {allSelected ? "Deselect all" : "Select all"}
           </button>
           <DownloadZipLink albumKey={album.key} count={album.cards.length} />
-          <button
-            type="button"
-            onClick={onReanalyze}
-            disabled={isAnalyzing}
-            className="flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-1.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 disabled:opacity-60"
-          >
+          <button type="button" onClick={onReanalyze} disabled={isAnalyzing} className={PILL_GHOST}>
             {isAnalyzing && !cardProps.selectionMode && <Spinner />}
             Re-analyze
           </button>
@@ -750,57 +763,60 @@ function SearchResults({
 
   return (
     <>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          {loading && <Spinner />}
-          <p className="min-w-0 truncate text-sm text-zinc-400">
-            {loading ? (
-              "Searching…"
-            ) : (
-              <>
-                <span className="font-medium text-zinc-100">{results.length}</span>{" "}
-                result{results.length === 1 ? "" : "s"} for{" "}
-                <span className="font-medium text-zinc-100">“{query}”</span>
-                {albumLabel && <> in {albumLabel}</>}
-              </>
-            )}
-          </p>
-          {albumLabel && !loading && (
-            <button
-              type="button"
-              onClick={onClearAlbum}
-              className="shrink-0 text-sm font-medium text-violet-400 hover:text-violet-300"
-            >
-              Search all albums
-            </button>
-          )}
-        </div>
+      <SectionHeader
+        note={loading ? "looking…" : `${results.length} found`}
+        title={
+          <>
+            “{query}”
+            {albumLabel && <span className="font-normal text-mute"> in {albumLabel}</span>}
+          </>
+        }
+      >
+        {albumLabel && !loading && (
+          <button type="button" onClick={onClearAlbum} className={PILL_GHOST}>
+            Search all albums
+          </button>
+        )}
         {results.length > 0 && !loading && (
           <button
             type="button"
             onClick={() => onSelectAll(results.map((c) => c.id), !allSelected)}
-            className="rounded-lg px-3 py-1.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-900"
+            className={PILL_GHOST}
           >
             {allSelected ? "Deselect all" : "Select all"}
           </button>
         )}
-      </div>
+      </SectionHeader>
 
       {error ? (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
-          {error}
-        </p>
+        <p className="rounded-3xl bg-red-50 px-5 py-4 text-sm text-red-700 ring-1 ring-red-200">{error}</p>
       ) : !loading && results.length === 0 ? (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/30 px-6 py-14 text-center">
-          <p className="font-medium text-zinc-200">No matches</p>
-          <p className="mx-auto mt-1 max-w-sm text-sm text-zinc-500">
-            Search looks at the text inside your photos and their AI summaries.
-            Try another word, or a phrase in quotes like “order total”.
-          </p>
-        </div>
+        <EmptyState
+          title="Nothing matches yet"
+          body="Search reads the text inside your photos and their captions. Try another word, or a phrase in quotes like “order total”."
+        />
       ) : (
         <CardGrid {...cardProps} cards={results} dimmed={loading} />
       )}
     </>
+  );
+}
+
+function EmptyState({ title, body }: { title: string; body: string }) {
+  return (
+    <div
+      className="sketch-border rounded-4xl bg-white/60 px-6 py-16 text-center backdrop-blur"
+      style={{ ["--c" as string]: "#c9d6e4" }}
+    >
+      <div className="mx-auto mb-4 grid h-16 w-16 rotate-[-6deg] place-items-center rounded-2xl bg-white shadow-soft">
+        <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} className="h-7 w-7 text-brand">
+          <rect x="3" y="5" width="18" height="14" rx="2.5" />
+          <circle cx="9" cy="10" r="1.6" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5" />
+        </svg>
+      </div>
+      <p className="font-semibold text-ink">{title}</p>
+      <p className="mx-auto mt-1 max-w-sm text-sm text-mute">{body}</p>
+    </div>
   );
 }

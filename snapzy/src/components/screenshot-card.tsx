@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "motion/react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { deleteScreenshot, retryProcessing } from "@/app/dashboard/actions";
 import { updateScreenshotCategory } from "@/app/dashboard/category-actions";
@@ -44,6 +45,8 @@ type Props = {
   onToggleSelect: (id: string) => void;
   // Opens the detail modal (ignored while selecting).
   onOpen: (id: string) => void;
+  // Position in the grid, used to stagger the entrance animation.
+  index?: number;
 };
 
 const dateFormat = new Intl.DateTimeFormat("en", {
@@ -57,7 +60,18 @@ const HOVER_REVEAL =
   "opacity-0 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
 
 const ICON_BUTTON =
-  "grid h-8 w-8 place-items-center rounded-lg bg-zinc-950/70 text-zinc-300 ring-1 ring-white/10 backdrop-blur transition hover:text-white";
+  "grid h-8 w-8 place-items-center rounded-full bg-white/90 text-ink/70 shadow-soft backdrop-blur transition hover:scale-110 hover:text-white";
+
+// Each print hangs a little crooked, like it was pinned up by hand. Derived
+// from the id so it stays the same across renders.
+function crookedness(id: string) {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return ((Math.abs(h) % 13) - 6) / 10; // -0.6deg … +0.6deg
+}
+
+// Shared with the detail modal so the photo grows out of its card.
+export const photoLayoutId = (id: string) => `photo-${id}`;
 
 export function ScreenshotCard({
   screenshot,
@@ -66,6 +80,7 @@ export function ScreenshotCard({
   selectionMode,
   onToggleSelect,
   onOpen,
+  index = 0,
 }: Props) {
   const [isDeleting, startDelete] = useTransition();
   const [isRetrying, startRetry] = useTransition();
@@ -146,55 +161,72 @@ export function ScreenshotCard({
     });
   }
 
+  const title = summary ?? screenshot.filename;
+
   return (
     // No overflow-hidden here: the "Move to" menu has to escape the card.
     <figure
-      className={`group relative mb-4 break-inside-avoid rounded-xl border bg-zinc-900 transition ${
-        selected
-          ? "border-violet-500 ring-2 ring-violet-500/40"
-          : "border-zinc-800"
-      } ${isDeleting ? "pointer-events-none scale-95 opacity-40" : ""} ${
-        menuOpen ? "z-30" : ""
-      }`}
+      style={{
+        ["--tilt" as string]: `${crookedness(screenshot.id)}deg`,
+        animationDelay: `${Math.min(index, 12) * 45}ms`,
+      }}
+      className={`group animate-rise relative mb-4 break-inside-avoid rounded-3xl bg-card p-2.5 shadow-soft transition-[box-shadow,opacity] duration-300 hover:z-10 hover:shadow-lift ${
+        selected ? "ring-[3px] ring-brand" : "ring-1 ring-line/70"
+      } ${isDeleting ? "pointer-events-none opacity-40" : ""} ${menuOpen ? "z-30" : ""}`}
     >
       <div
-        className={`relative overflow-hidden rounded-t-xl ${
-          category || screenshot.summary || canRetry || error ? "" : "rounded-b-xl"
-        } cursor-pointer`}
+        className="relative cursor-pointer overflow-hidden rounded-2xl bg-brand-soft transition-transform duration-200 ease-out [transform:perspective(900px)_rotateX(var(--rx,0deg))_rotateY(var(--ry,0deg))]"
         onClick={() =>
           selectionMode ? onToggleSelect(screenshot.id) : onOpen(screenshot.id)
         }
+        // 3D tilt + glare that follow the pointer (CSS vars, no re-render).
+        onPointerMove={(e) => {
+          if (e.pointerType !== "mouse") return;
+          const r = e.currentTarget.getBoundingClientRect();
+          const px = (e.clientX - r.left) / r.width;
+          const py = (e.clientY - r.top) / r.height;
+          const el = e.currentTarget.style;
+          el.setProperty("--ry", `${(px - 0.5) * 9}deg`);
+          el.setProperty("--rx", `${(0.5 - py) * 9}deg`);
+          el.setProperty("--gx", `${px * 100}%`);
+          el.setProperty("--gy", `${py * 100}%`);
+        }}
+        onPointerLeave={(e) => {
+          const el = e.currentTarget.style;
+          el.setProperty("--rx", "0deg");
+          el.setProperty("--ry", "0deg");
+        }}
       >
-        {/* Plain <img>: signed URLs change on every render, so next/image's
-            optimizer cache would never hit. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        {/* Plain <img> (via motion): signed URLs change on every render, so
+            next/image's optimizer cache would never hit. */}
+        <motion.img
+          layoutId={photoLayoutId(screenshot.id)}
           src={screenshot.url}
           alt={summary ?? screenshot.filename}
           loading="lazy"
           decoding="async"
-          className={`block h-auto w-full transition duration-300 ease-out group-hover:scale-[1.03] ${
-            processing || isMoving ? "opacity-50" : ""
+          className={`block h-auto w-full transition-[scale,opacity] duration-500 ease-out group-hover:scale-[1.04] ${
+            processing || isMoving ? "opacity-60" : ""
           }`}
         />
 
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+          style={{
+            background:
+              "radial-gradient(circle at var(--gx, 50%) var(--gy, 50%), rgb(255 255 255 / 0.45), transparent 55%)",
+          }}
+        />
+
         {processing && (
-          <div className="absolute inset-0 grid place-items-center bg-zinc-950/40">
-            <div className="flex items-center gap-2 rounded-full bg-zinc-950/80 px-3 py-1.5 text-xs font-medium text-zinc-200 ring-1 ring-zinc-700">
+          <div className="absolute inset-0 grid place-items-center bg-white/45 backdrop-blur-[2px]">
+            <div className="flex items-center gap-2 rounded-full bg-white px-3.5 py-1.5 text-brand-deep shadow-soft">
               <Spinner />
-              Analyzing…
+              <span className="font-hand text-lg leading-none">reading it…</span>
             </div>
           </div>
         )}
-
-        <div className="pointer-events-none absolute inset-0 flex flex-col justify-end bg-linear-to-t from-black/80 via-black/10 to-transparent p-3 opacity-0 transition duration-300 group-hover:opacity-100">
-          <p className="truncate text-sm font-medium text-white">
-            {screenshot.filename}
-          </p>
-          <p className="text-xs text-zinc-300">
-            {dateFormat.format(new Date(screenshot.createdAt))}
-          </p>
-        </div>
 
         <button
           type="button"
@@ -205,10 +237,10 @@ export function ScreenshotCard({
             e.stopPropagation();
             onToggleSelect(screenshot.id);
           }}
-          className={`absolute top-2 left-2 grid h-7 w-7 place-items-center rounded-md ring-1 backdrop-blur transition focus-visible:opacity-100 ${
+          className={`absolute top-2.5 left-2.5 grid h-7 w-7 place-items-center rounded-full shadow-soft transition focus-visible:opacity-100 ${
             selected
-              ? "bg-violet-600 text-white ring-violet-400"
-              : "bg-zinc-950/70 text-transparent ring-white/20 hover:ring-white/50"
+              ? "scale-110 bg-brand text-white"
+              : "bg-white/90 text-transparent ring-1 ring-line hover:text-brand"
           } ${selected || selectionMode ? "opacity-100" : HOVER_REVEAL}`}
         >
           <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} className="h-4 w-4">
@@ -217,7 +249,7 @@ export function ScreenshotCard({
         </button>
 
         <div
-          className={`absolute top-2 right-2 flex gap-1 transition ${
+          className={`absolute top-2.5 right-2.5 flex gap-1.5 transition ${
             menuOpen ? "opacity-100" : HOVER_REVEAL
           }`}
           onClick={(e) => e.stopPropagation()}
@@ -228,7 +260,7 @@ export function ScreenshotCard({
               onClick={handleCopy}
               aria-label={`Copy text from ${screenshot.filename}`}
               title="Copy text"
-              className={`${ICON_BUTTON} hover:bg-violet-600`}
+              className={`${ICON_BUTTON} hover:bg-brand`}
             >
               <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
                 <rect x="9" y="9" width="11" height="11" rx="2" />
@@ -241,7 +273,7 @@ export function ScreenshotCard({
             download={screenshot.filename}
             aria-label={`Download ${screenshot.filename}`}
             title="Download image"
-            className={`${ICON_BUTTON} hover:bg-sky-600`}
+            className={`${ICON_BUTTON} hover:bg-sky-500`}
           >
             <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" />
@@ -255,7 +287,7 @@ export function ScreenshotCard({
             aria-expanded={menuOpen}
             aria-label={`Move ${screenshot.filename} to another album`}
             title="Move to…"
-            className={`${ICON_BUTTON} hover:bg-emerald-600 ${menuOpen ? "bg-emerald-600 text-white" : ""}`}
+            className={`${ICON_BUTTON} hover:bg-emerald-500 ${menuOpen ? "bg-emerald-500 text-white" : ""}`}
           >
             <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Zm9 3v6m0 0-2.5-2.5M12 16l2.5-2.5" />
@@ -267,14 +299,10 @@ export function ScreenshotCard({
             disabled={isDeleting}
             aria-label={`Delete ${screenshot.filename}`}
             title="Delete"
-            className={`${ICON_BUTTON} hover:bg-red-500/90`}
+            className={`${ICON_BUTTON} hover:bg-red-500`}
           >
             <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 7h16M10 11v6m4-6v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3"
-              />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M10 11v6m4-6v6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
             </svg>
           </button>
         </div>
@@ -285,11 +313,9 @@ export function ScreenshotCard({
           ref={menuRef}
           role="menu"
           aria-label="Move to album"
-          className="absolute top-12 right-2 z-30 max-h-72 w-52 overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 p-1 shadow-2xl shadow-black/60"
+          className="absolute top-13 right-3 z-30 max-h-72 w-56 overflow-y-auto rounded-2xl bg-white p-1.5 shadow-lift ring-1 ring-line"
         >
-          <p className="px-2.5 pt-1.5 pb-1 text-[11px] font-medium tracking-wide text-zinc-500 uppercase">
-            Move to
-          </p>
+          <p className="px-3 pt-1.5 pb-1 font-hand text-lg text-mute">move to…</p>
           {categories.map((c) => {
             const current = c.id === screenshot.categoryId;
             return (
@@ -299,14 +325,14 @@ export function ScreenshotCard({
                 role="menuitemradio"
                 aria-checked={current}
                 onClick={() => handleMove(c)}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition ${
-                  current ? "bg-zinc-800 text-zinc-100" : "text-zinc-300 hover:bg-zinc-800"
+                className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm transition ${
+                  current ? "bg-brand-soft font-medium text-brand-deep" : "text-ink/80 hover:bg-paper"
                 }`}
               >
-                <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${colorStyles[c.color].dot}`} />
+                <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${colorStyles[c.color].dot}`} />
                 <span className="min-w-0 flex-1 truncate">{c.name}</span>
                 {current && (
-                  <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3.5 w-3.5 text-violet-400">
+                  <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} className="h-3.5 w-3.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="m5 12 5 5 9-10" />
                   </svg>
                 )}
@@ -316,64 +342,75 @@ export function ScreenshotCard({
         </div>
       )}
 
-      {(category || screenshot.summary || canRetry || error) && (
-        <figcaption className="space-y-2 p-3">
-          {(category || smartLabels.length > 0) && (
-            <div className="flex flex-wrap gap-1">
-              {category && (
-                <span
-                  className={`inline-block max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ${colorStyles[category.color].badge}`}
-                >
-                  {category.name}
-                </span>
-              )}
-              {smartLabels.map((label) => (
-                <span
-                  key={label}
-                  title="Smart details found. Open the photo to see them."
-                  className="inline-flex items-center gap-1 rounded-full bg-linear-to-r from-violet-500/20 to-cyan-400/20 px-2 py-0.5 text-[11px] font-medium text-violet-200 ring-1 ring-violet-400/30"
-                >
-                  <svg aria-hidden viewBox="0 0 24 24" fill="currentColor" className="h-2.5 w-2.5">
-                    <path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" />
-                  </svg>
-                  {label}
-                </span>
-              ))}
-            </div>
+      <figcaption className="px-1.5 pt-3 pb-1">
+        <p className="line-clamp-2 text-[13px] leading-snug font-semibold text-ink" title={title}>
+          {title}
+        </p>
+        <div className="mt-1.5 flex items-center justify-between gap-2">
+          <p className="min-w-0 truncate text-xs text-mute">
+            {category ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${colorStyles[category.color].dot}`} />
+                {category.name}
+              </span>
+            ) : processing ? (
+              "Sorting…"
+            ) : (
+              "Unsorted"
+            )}
+            <span className="text-mute/60"> · {dateFormat.format(new Date(screenshot.createdAt))}</span>
+          </p>
+          {!selectionMode && (
+            <button
+              type="button"
+              onClick={() => onOpen(screenshot.id)}
+              className="shrink-0 rounded-full bg-brand px-3 py-1 text-[10px] font-semibold tracking-wider text-white uppercase shadow-soft transition hover:bg-brand-deep [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+            >
+              View
+            </button>
           )}
-          {screenshot.summary && (
-            <p className="line-clamp-3 text-sm text-zinc-300">
-              {summary}
-            </p>
-          )}
-          {screenshot.tags.length > 0 && (
-            <ul className="flex flex-wrap gap-1">
-              {screenshot.tags.map((tag) => (
-                <li key={tag} className="text-xs text-zinc-500">
-                  #{tag}
-                </li>
-              ))}
-            </ul>
-          )}
-          {canRetry && !processing && (
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs text-red-300">
-                {screenshot.stuck ? "Analysis timed out." : "AI analysis failed."}
-              </p>
-              <button
-                type="button"
-                onClick={handleRetry}
-                disabled={isRetrying}
-                className="flex items-center gap-1.5 rounded-md border border-zinc-700 px-2 py-1 text-xs font-medium text-zinc-200 transition hover:border-zinc-500 disabled:opacity-60"
+        </div>
+
+        {smartLabels.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {smartLabels.map((label) => (
+              <span
+                key={label}
+                title="Smart details found. Open the photo to see them."
+                className="inline-flex items-center gap-1 rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-semibold text-brand-deep"
               >
-                {isRetrying && <Spinner />}
-                {screenshot.summary ? "Re-analyze" : "Run AI"}
-              </button>
-            </div>
-          )}
-          {error && <p className="text-xs text-red-300">{error}</p>}
-        </figcaption>
-      )}
+                <svg aria-hidden viewBox="0 0 24 24" fill="currentColor" className="h-2.5 w-2.5">
+                  <path d="M12 2l2.4 6.6L21 11l-6.6 2.4L12 20l-2.4-6.6L3 11l6.6-2.4L12 2z" />
+                </svg>
+                {label}
+              </span>
+            ))}
+          </div>
+        )}
+        {screenshot.tags.length > 0 && (
+          <p className="mt-1.5 truncate font-hand text-base text-mute">
+            {screenshot.tags.map((t) => `#${t}`).join("  ")}
+          </p>
+        )}
+
+        {canRetry && !processing && (
+          <div className="mt-2 flex items-center justify-between gap-2 rounded-2xl bg-red-50 px-3 py-2">
+            <p className="text-xs text-red-600">
+              {screenshot.stuck ? "Took too long." : "Couldn't read this one."}
+            </p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              disabled={isRetrying}
+              className="flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-red-600 shadow-soft transition hover:bg-red-100 disabled:opacity-60"
+            >
+              {isRetrying && <Spinner />}
+              {screenshot.summary ? "Retry" : "Run AI"}
+            </button>
+          </div>
+        )}
+        {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      </figcaption>
     </figure>
   );
 }

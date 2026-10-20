@@ -1,76 +1,123 @@
 import Link from "next/link";
+import { Brushstroke, Logo, WatercolorBackdrop } from "@/components/watercolor";
+
+const prints = [
+  { tone: "from-brand/70 via-lilac/60 to-blush/70", caption: "wifi pw ✓", tilt: "-rotate-6", pos: "left-0 top-10" },
+  { tone: "from-blush via-[#f7dfc8] to-brand/50", caption: "gcash receipt", tilt: "rotate-3", pos: "left-24 top-0" },
+  { tone: "from-lilac via-brand/50 to-[#bfe3d6]", caption: "flight PR 102", tilt: "-rotate-2", pos: "left-12 top-36" },
+];
 
 const features = [
   {
-    title: "Reads your screenshots",
-    body: "OCR pulls the text out of every image so nothing gets lost.",
+    title: "Reads every word",
+    body: "OCR pulls the text out of each screenshot so nothing gets lost.",
+    note: "copy in one tap",
   },
   {
-    title: "Sorts them for you",
-    body: "AI writes a summary and drops each shot into the right category.",
+    title: "Hangs it in the right room",
+    body: "AI sorts photos into albums you can rename, recolor and create.",
+    note: "your categories",
   },
   {
-    title: "Find anything fast",
+    title: "Finds it in a blink",
     body: "Search by what's inside the picture, not by file name.",
+    note: "“order total”",
   },
 ];
 
 export default function Home() {
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden bg-zinc-950 text-zinc-100">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-40 left-1/2 h-[28rem] w-[48rem] -translate-x-1/2 rounded-full bg-violet-600/20 blur-3xl"
-      />
+    <div className="paper-grain relative flex flex-1 flex-col overflow-hidden">
+      <WatercolorBackdrop intensity="bold" />
 
-      <header className="relative mx-auto flex w-full max-w-5xl items-center justify-between px-6 py-6">
-        <div className="flex items-center gap-2 font-semibold tracking-tight">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-linear-to-br from-violet-500 to-cyan-400 text-sm font-bold text-zinc-950">
-            S
-          </span>
-          Snapzy
-        </div>
+      <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-6 sm:px-8">
+        <Logo />
         <Link
           href="/login"
-          className="text-sm font-medium text-zinc-300 hover:text-white"
+          className="rounded-full px-4 py-2 text-sm font-medium text-ink/70 transition hover:bg-white/70 hover:text-ink"
         >
           Log in
         </Link>
       </header>
 
-      <main className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col items-center justify-center px-6 py-20 text-center">
-        <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-300">
-          AI-Powered Screenshot Sorter
-        </span>
-        <h1 className="mt-6 max-w-2xl text-4xl font-semibold tracking-tight sm:text-6xl">
-          Your screenshots,{" "}
-          <span className="bg-linear-to-r from-violet-400 to-cyan-300 bg-clip-text text-transparent">
-            finally organized
-          </span>
-        </h1>
-        <p className="mt-5 max-w-xl text-lg text-zinc-400">
-          Snapzy reads, summarizes, and categorizes every screenshot you upload,
-          so you can find that receipt, meme, or code snippet in seconds.
-        </p>
-        <Link
-          href="/login"
-          className="mt-10 rounded-lg bg-violet-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-violet-900/40 transition hover:bg-violet-500"
-        >
-          Get Started
-        </Link>
+      <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-14 px-5 pt-6 pb-20 sm:px-8 lg:grid-cols-[1.1fr_1fr] lg:pt-12">
+        <section>
+          <p className="font-hand text-2xl text-brand-deep">hello, tidy camera roll —</p>
+          <h1 className="mt-2 text-4xl leading-[1.1] font-bold tracking-tight text-ink sm:text-6xl">
+            Your screenshots,
+            <br />
+            <span className="relative inline-block text-brand-deep">
+              curated like art
+              <Brushstroke className="absolute -bottom-3 left-0 h-4 w-full text-blush" />
+            </span>
+          </h1>
+          <p className="mt-7 max-w-lg text-base leading-relaxed text-mute sm:text-lg">
+            Snapzy reads, summarizes and sorts every picture you drop in. Receipts,
+            WiFi passwords, boarding passes and memes each find their own wall.
+          </p>
+          <div className="mt-9 flex flex-wrap items-center gap-3">
+            <Link
+              href="/signup"
+              className="rounded-full bg-brand px-7 py-3.5 text-sm font-semibold tracking-wide text-white uppercase shadow-lift transition hover:-translate-y-0.5 hover:bg-brand-deep"
+            >
+              Get started
+            </Link>
+            <Link
+              href="/login"
+              className="rounded-full bg-white/80 px-7 py-3.5 text-sm font-semibold tracking-wide text-brand-deep uppercase shadow-soft ring-1 ring-line backdrop-blur transition hover:-translate-y-0.5 hover:bg-white"
+            >
+              I have an account
+            </Link>
+          </div>
+        </section>
 
-        <ul className="mt-20 grid w-full gap-4 text-left sm:grid-cols-3">
-          {features.map((f) => (
+        {/* A little pile of "prints" that fans out on hover. */}
+        <section aria-hidden className="group relative mx-auto h-80 w-72 sm:h-96 sm:w-80">
+          {prints.map((p, i) => (
+            <figure
+              key={p.caption}
+              className={`absolute ${p.pos} ${p.tilt} w-48 rounded-md bg-white p-2.5 pb-9 shadow-lift transition duration-500 ease-out sm:w-56 ${
+                i === 0
+                  ? "group-hover:-translate-x-6 group-hover:-rotate-12"
+                  : i === 1
+                    ? "group-hover:translate-x-8 group-hover:rotate-9"
+                    : "group-hover:translate-y-6 group-hover:rotate-1"
+              }`}
+            >
+              <div className={`aspect-4/5 rounded-sm bg-linear-to-br ${p.tone}`} />
+              <figcaption className="absolute right-0 bottom-1.5 left-0 text-center font-hand text-xl text-ink/70">
+                {p.caption}
+              </figcaption>
+            </figure>
+          ))}
+          <span className="absolute -right-4 -bottom-6 rotate-[-8deg] rounded-full bg-white px-4 py-2 font-hand text-xl text-brand-deep shadow-soft">
+            sorted by AI ✿
+          </span>
+        </section>
+      </main>
+
+      <section className="mx-auto w-full max-w-6xl px-5 pb-20 sm:px-8">
+        <div className="mb-5 flex items-end justify-between">
+          <h2 className="text-lg font-semibold text-ink">Why it feels different</h2>
+          <span className="font-hand text-xl text-mute">a gallery, not a folder</span>
+        </div>
+        <ul className="grid gap-5 sm:grid-cols-3">
+          {features.map((f, i) => (
             <li
               key={f.title}
-              className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5"
+              className="animate-rise rounded-3xl bg-white/85 p-6 shadow-soft ring-1 ring-line backdrop-blur"
+              style={{ animationDelay: `${i * 120}ms` }}
             >
-              <h2 className="font-medium text-zinc-100">{f.title}</h2>
-              <p className="mt-1 text-sm text-zinc-400">{f.body}</p>
+              <span className="grid h-10 w-10 place-items-center rounded-2xl bg-brand-soft font-hand text-2xl text-brand-deep">
+                {i + 1}
+              </span>
+              <h3 className="mt-4 font-semibold text-ink">{f.title}</h3>
+              <p className="mt-1.5 text-sm leading-relaxed text-mute">{f.body}</p>
+              <p className="mt-4 font-hand text-xl text-brand-deep">{f.note}</p>
             </li>
           ))}
         </ul>
-      </main>
+      </section>
     </div>
   );
 }

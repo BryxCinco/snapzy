@@ -1,25 +1,103 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* -----------------------------------------------------------------------------
+   Snapzy — "watercolor gallery" theme
+   Airy paper background, soft sky-blue accent, watercolor washes in blush and
+   lilac, Poppins for UI and Caveat for handwritten notes.
+   ----------------------------------------------------------------------------- */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-paper: #f6f8fb;
+  --color-card: #ffffff;
+  --color-ink: #1d2433;
+  --color-mute: #8a93a3;
+  --color-line: #e6eaf0;
+  --color-brand: #4fa3e3;
+  --color-brand-deep: #2f86cf;
+  --color-brand-soft: #eaf4fc;
+  --color-blush: #f2c4d3;
+  --color-lilac: #c8c2ee;
+
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-hand: var(--font-caveat), "Comic Sans MS", cursive;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --shadow-soft: 0 1px 2px rgb(29 36 51 / 0.04), 0 8px 24px -12px rgb(29 36 51 / 0.18);
+  --shadow-lift: 0 2px 4px rgb(29 36 51 / 0.05), 0 22px 40px -18px rgb(47 134 207 / 0.45);
+
+  --animate-drift: drift 22s ease-in-out infinite alternate;
+  --animate-rise: rise 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-draw: draw 1.2s 0.3s ease-out both;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@keyframes drift {
+  0% { transform: translate3d(0, 0, 0) scale(1) rotate(0deg); }
+  50% { transform: translate3d(4%, -3%, 0) scale(1.08) rotate(8deg); }
+  100% { transform: translate3d(-3%, 4%, 0) scale(0.96) rotate(-6deg); }
+}
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px) rotate(var(--tilt, 0deg)); }
+  to { opacity: 1; transform: translateY(0) rotate(var(--tilt, 0deg)); }
+}
+
+@keyframes draw {
+  from { stroke-dashoffset: var(--len, 400); }
+  to { stroke-dashoffset: 0; }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-brand) 25%, transparent);
+}
+
+/* Paper grain: SVG noise layered over the page at very low opacity. */
+.paper-grain {
+  position: relative;
+  isolation: isolate;
+}
+.paper-grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.45  0 0 0 0 0.5  0 0 0 0 0.6  0 0 0 0.09 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Soft watercolor wash: blurred, slightly irregular blob. */
+.wash {
+  position: absolute;
+  border-radius: 42% 58% 63% 37% / 41% 44% 56% 59%;
+  filter: blur(42px);
+  opacity: 0.55;
+  will-change: transform;
+}
+
+/* Thin, hand-drawn looking dashed border (upload zone, empty albums). */
+.sketch-border {
+  background-image:
+    repeating-linear-gradient(90deg, var(--c, #b9cde0) 0 10px, transparent 10px 18px),
+    repeating-linear-gradient(90deg, var(--c, #b9cde0) 0 10px, transparent 10px 18px),
+    repeating-linear-gradient(0deg, var(--c, #b9cde0) 0 10px, transparent 10px 18px),
+    repeating-linear-gradient(0deg, var(--c, #b9cde0) 0 10px, transparent 10px 18px);
+  background-size: 100% 1.5px, 100% 1.5px, 1.5px 100%, 1.5px 100%;
+  background-position: 0 0, 0 100%, 0 0, 100% 0;
+  background-repeat: no-repeat;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

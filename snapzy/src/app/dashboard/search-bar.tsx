@@ -2,6 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { NAV_EVENTS } from "./mobile-nav";
 
 const DEBOUNCE_MS = 300;
 
@@ -35,8 +36,13 @@ export function SearchBar() {
       e.preventDefault();
       inputRef.current?.focus();
     }
+    const focus = () => inputRef.current?.focus();
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(NAV_EVENTS.search, focus);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(NAV_EVENTS.search, focus);
+    };
   }, []);
 
   return (
@@ -51,7 +57,7 @@ export function SearchBar() {
         fill="none"
         stroke="currentColor"
         strokeWidth={2}
-        className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-500"
+        className="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-brand"
       >
         <circle cx="11" cy="11" r="7" />
         <path strokeLinecap="round" d="m20 20-3.5-3.5" />
@@ -67,10 +73,10 @@ export function SearchBar() {
             inputRef.current?.blur();
           }
         }}
-        placeholder="Search text in your photos…"
+        placeholder="Find anything in your photos…"
         aria-label="Search screenshots"
         enterKeyHint="search"
-        className="h-10 w-full rounded-lg border border-zinc-800 bg-zinc-900 pr-9 pl-9 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/30 [&::-webkit-search-cancel-button]:hidden"
+        className="h-11 w-full rounded-full bg-paper pr-11 pl-11 text-sm text-ink ring-1 ring-line placeholder:text-mute/80 outline-none transition focus:bg-white focus:shadow-soft focus:ring-2 focus:ring-brand [&::-webkit-search-cancel-button]:hidden"
       />
       {value ? (
         <button
@@ -80,14 +86,14 @@ export function SearchBar() {
             inputRef.current?.focus();
           }}
           aria-label="Clear search"
-          className="absolute top-1/2 right-2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded text-zinc-500 hover:text-zinc-200"
+          className="absolute top-1/2 right-3 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-mute transition hover:bg-brand-soft hover:text-brand-deep"
         >
           <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
             <path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" />
           </svg>
         </button>
       ) : (
-        <kbd className="pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 rounded border border-zinc-700 px-1.5 font-mono text-[10px] text-zinc-500 sm:block">
+        <kbd className="pointer-events-none absolute top-1/2 right-3.5 hidden -translate-y-1/2 rounded-md bg-white px-1.5 font-mono text-[10px] text-mute ring-1 ring-line sm:block">
           /
         </kbd>
       )}
@@ -96,5 +102,5 @@ export function SearchBar() {
 }
 
 export function SearchBarFallback() {
-  return <div className="h-10 w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-900" />;
+  return <div className="h-11 w-full max-w-md rounded-full bg-paper ring-1 ring-line" />;
 }

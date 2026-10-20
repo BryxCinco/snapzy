@@ -8,7 +8,10 @@ import { type ProcessingStatus, STUCK_AFTER_MS } from "@/lib/categories";
 import { getUserCategories } from "@/lib/categories-server";
 import { parseMetadata } from "@/lib/metadata";
 import { createClient } from "@/lib/supabase/server";
+import { Logo, WatercolorBackdrop } from "@/components/watercolor";
 import { GalleryView } from "./gallery-view";
+import { MobileNav } from "./mobile-nav";
+import { TimeGreeting } from "./time-greeting";
 import { SearchBar, SearchBarFallback } from "./search-bar";
 import { UploadZone } from "./upload-zone";
 
@@ -20,14 +23,13 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
 // the session (cookies) streams in behind <Suspense>.
 export default function DashboardPage() {
   return (
-    <div className="flex flex-1 flex-col bg-zinc-950 text-zinc-100">
+    <div className="paper-grain relative flex flex-1 flex-col">
+      <WatercolorBackdrop />
+
       {/* Fixed h-16 so the sticky album bar can sit right under it (top-16). */}
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-zinc-800 bg-zinc-950/90 px-4 backdrop-blur sm:gap-6 sm:px-6">
-        <div className="flex shrink-0 items-center gap-2 font-semibold tracking-tight">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-linear-to-br from-violet-500 to-cyan-400 text-xs font-bold text-zinc-950">
-            S
-          </span>
-          <span className="hidden sm:inline">Snapzy</span>
+      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line/70 bg-white/75 px-4 backdrop-blur-xl sm:gap-6 sm:px-6">
+        <div className="shrink-0">
+          <Logo href="/dashboard" />
         </div>
         <div className="flex min-w-0 flex-1 justify-center">
           {/* useSearchParams needs a Suspense boundary under cacheComponents. */}
@@ -35,70 +37,105 @@ export default function DashboardPage() {
             <SearchBar />
           </Suspense>
         </div>
-        <div className="flex shrink-0 items-center gap-4">
-          <Suspense
-            fallback={
-              <span className="hidden h-4 w-40 animate-pulse rounded bg-zinc-800 lg:inline-block" />
-            }
-          >
+        <div className="hidden shrink-0 items-center gap-3 sm:flex">
+          <Suspense fallback={<span className="h-9 w-9 animate-pulse rounded-full bg-line" />}>
             <CurrentUser />
           </Suspense>
-          <form action={logout}>
-            <button
-              type="submit"
-              aria-label="Log out"
-              title="Log out"
-              className="flex h-10 items-center gap-2 rounded-lg border border-zinc-700 px-2.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900 sm:px-3"
-            >
-              <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4 sm:hidden">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 17l5-5-5-5M20 12H9M12 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" />
-              </svg>
-              <span className="hidden sm:inline">Log out</span>
-            </button>
-          </form>
+          <LogoutButton />
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
-        <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Your library</h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          AI sorts every photo into albums. Search finds the text inside them.
-        </p>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-6 pb-32 sm:px-6 sm:pt-8 sm:pb-16">
+        <section className="relative overflow-hidden rounded-4xl bg-linear-to-br from-brand via-[#8cbcf0] to-blush p-6 text-white shadow-lift sm:p-8">
+          <div aria-hidden className="wash animate-drift -top-16 -right-10 h-72 w-72 bg-white/50" />
+          <div aria-hidden className="wash animate-drift -bottom-24 left-1/3 h-64 w-96 bg-lilac" style={{ animationDelay: "-8s" }} />
+          <div className="relative grid items-center gap-6 lg:grid-cols-[1fr_minmax(0,26rem)]">
+            <div>
+              <Suspense fallback={<p className="font-hand text-3xl text-white/90">hello there,</p>}>
+                <HeroGreeting />
+              </Suspense>
+              <h1 className="mt-1 text-3xl font-bold tracking-tight sm:text-4xl">Your gallery</h1>
+              <p className="mt-2 max-w-md text-sm leading-relaxed text-white/85 sm:text-base">
+                Drop in screenshots and photos. AI reads them, writes a caption and
+                hangs each one in the right album.
+              </p>
+            </div>
+            <UploadZone />
+          </div>
+        </section>
 
-        <div className="mt-6">
-          <UploadZone />
-        </div>
-
-        <div className="mt-10">
+        <div className="mt-8">
           <Suspense fallback={<GallerySkeleton />}>
             <Gallery />
           </Suspense>
         </div>
       </main>
+
+      <MobileNav logout={<LogoutButton compact />} />
     </div>
   );
 }
 
-async function CurrentUser() {
+function LogoutButton({ compact = false }: { compact?: boolean }) {
+  return (
+    <form action={logout}>
+      <button
+        type="submit"
+        aria-label="Log out"
+        title="Log out"
+        className={
+          compact
+            ? "flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] font-medium text-mute"
+            : "flex h-9 items-center gap-2 rounded-full px-3.5 text-sm font-medium text-mute ring-1 ring-line transition hover:bg-white hover:text-ink"
+        }
+      >
+        <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className={compact ? "h-5 w-5" : "h-4 w-4"}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 17l5-5-5-5M20 12H9M12 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" />
+        </svg>
+        {compact ? "Log out" : <span className="hidden md:inline">Log out</span>}
+      </button>
+    </form>
+  );
+}
+
+async function getSessionUser() {
   // Supabase reads the clock (Date.now()) to check token expiry. Opt out of
   // prerendering here, inside <Suspense>, so only this part waits for the request.
   await connection();
-
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   // The proxy already guards this route; this is a second line of defense.
-  if (!user) {
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
+  return user;
+}
 
+// "brian.francisco1003@…" → "Brian"
+function firstNameFrom(email: string | undefined) {
+  const local = (email ?? "").split("@")[0].split(/[._+\-\d]/)[0];
+  return local ? local[0].toUpperCase() + local.slice(1).toLowerCase() : "there";
+}
+
+async function CurrentUser() {
+  const user = await getSessionUser();
+  const name = firstNameFrom(user.email);
   return (
-    <span className="hidden max-w-48 truncate text-sm text-zinc-400 lg:inline">
-      {user.email}
+    <span className="flex items-center gap-2.5">
+      <span className="hidden max-w-44 truncate text-sm text-mute lg:inline">{user.email}</span>
+      <span
+        title={user.email}
+        className="grid h-9 w-9 place-items-center rounded-full bg-linear-to-br from-brand to-lilac text-sm font-semibold text-white shadow-soft"
+      >
+        {name[0]}
+      </span>
     </span>
   );
+}
+
+async function HeroGreeting() {
+  const user = await getSessionUser();
+  return <TimeGreeting name={firstNameFrom(user.email)} />;
 }
 
 const SCREENSHOT_COLUMNS =
@@ -135,13 +172,8 @@ type ScreenshotRow = {
 };
 
 async function Gallery() {
-  await connection();
-
+  const user = await getSessionUser();
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
 
   // RLS limits both queries to the logged-in user's rows.
   const [{ data: rows, error }, categories] = await Promise.all([
@@ -153,12 +185,12 @@ async function Gallery() {
 
   if ("error" in categories) {
     return (
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+      <div className="rounded-3xl bg-amber-50 px-5 py-4 text-sm text-amber-800 ring-1 ring-amber-200">
         <p>
           Couldn&apos;t load your categories:{" "}
           <span className="font-mono">{categories.error}</span>
         </p>
-        <p className="mt-1 text-amber-200/70">
+        <p className="mt-1 text-amber-700/80">
           Make sure migrations 005 and 006 in{" "}
           <code className="font-mono">supabase/migrations/</code> have been run in
           the Supabase SQL Editor, then refresh.
@@ -169,7 +201,7 @@ async function Gallery() {
 
   if (error) {
     return (
-      <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+      <p className="rounded-3xl bg-red-50 px-5 py-4 text-sm text-red-700 ring-1 ring-red-200">
         Couldn&apos;t load your screenshots: {error.message}
       </p>
     );
@@ -237,16 +269,17 @@ function extractTagNames(links: unknown): string[] {
   });
 }
 
-const skeletonHeights =["h-40", "h-64", "h-52", "h-72", "h-44", "h-60", "h-56", "h-48"];
+const skeletonHeights = ["h-48", "h-72", "h-60", "h-80", "h-52", "h-64", "h-56", "h-48"];
 
 function GallerySkeleton() {
   return (
     <div className="columns-2 gap-4 md:columns-3 lg:columns-4">
       {skeletonHeights.map((h, i) => (
-        <div
-          key={i}
-          className={`mb-4 break-inside-avoid animate-pulse rounded-xl bg-zinc-900 ${h}`}
-        />
+        <div key={i} className="mb-4 break-inside-avoid rounded-3xl bg-white p-2.5 shadow-soft">
+          <div className={`animate-pulse rounded-2xl bg-brand-soft ${h}`} />
+          <div className="mt-3 h-3 w-2/3 animate-pulse rounded-full bg-line" />
+          <div className="mt-2 mb-1 h-2.5 w-1/3 animate-pulse rounded-full bg-line/70" />
+        </div>
       ))}
     </div>
   );

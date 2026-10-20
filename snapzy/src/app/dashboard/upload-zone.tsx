@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { isAllowedImageType, MAX_UPLOAD_BYTES } from "@/lib/uploads";
 import { uploadScreenshot } from "./actions";
+import { NAV_EVENTS } from "./mobile-nav";
 
 type Progress = { done: number; total: number };
 
@@ -71,6 +72,13 @@ export function UploadZone() {
     return () => window.removeEventListener("paste", onPaste);
   });
 
+  // The mobile nav's big "+" opens the file picker.
+  useEffect(() => {
+    const open = () => inputRef.current?.click();
+    window.addEventListener(NAV_EVENTS.upload, open);
+    return () => window.removeEventListener(NAV_EVENTS.upload, open);
+  }, []);
+
   const percent = progress
     ? Math.round((progress.done / progress.total) * 100)
     : 0;
@@ -88,6 +96,12 @@ export function UploadZone() {
             inputRef.current?.click();
           }
         }}
+        // A watercolor spot follows the cursor (CSS vars, no re-render).
+        onPointerMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          e.currentTarget.style.setProperty("--x", `${e.clientX - r.left}px`);
+          e.currentTarget.style.setProperty("--y", `${e.clientY - r.top}px`);
+        }}
         onDragOver={(e) => {
           e.preventDefault();
           setIsDragging(true);
@@ -98,65 +112,58 @@ export function UploadZone() {
           setIsDragging(false);
           uploadFiles(Array.from(e.dataTransfer.files));
         }}
-        className={`group relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed px-6 py-10 text-center transition outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50 ${
-          isDragging
-            ? "border-violet-400 bg-violet-500/10"
-            : "border-zinc-700 bg-zinc-900/40 hover:border-zinc-500 hover:bg-zinc-900/70"
+        style={{ ["--c" as string]: "rgb(255 255 255 / 0.75)" }}
+        className={`sketch-border group relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-3xl px-6 py-8 text-center text-white backdrop-blur-md transition duration-300 outline-none focus-visible:ring-4 focus-visible:ring-white/50 ${
+          isDragging ? "scale-[1.02] bg-white/35" : "bg-white/15 hover:bg-white/25"
         } ${uploading ? "cursor-wait" : ""}`}
       >
-        <div className="grid h-12 w-12 place-items-center rounded-xl bg-linear-to-br from-violet-500/20 to-cyan-400/20 text-violet-300 transition group-hover:scale-105">
-          <svg
-            aria-hidden
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.8}
-            className="h-6 w-6"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
-            />
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute h-56 w-56 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/40 blur-2xl transition-[opacity,transform] duration-500 ${
+            isDragging ? "scale-150 opacity-100" : "scale-100 opacity-0 group-hover:opacity-100"
+          }`}
+          style={{ left: "var(--x, 50%)", top: "var(--y, 50%)" }}
+        />
+
+        <div
+          className={`relative grid h-14 w-14 place-items-center rounded-2xl bg-white text-brand-deep shadow-soft transition duration-300 ${
+            isDragging ? "-translate-y-1 rotate-6" : "group-hover:-rotate-6"
+          }`}
+        >
+          <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} className="h-6 w-6">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
           </svg>
         </div>
 
         {uploading && progress ? (
-          <div className="mt-4 w-full max-w-xs">
-            <p className="text-sm font-medium text-zinc-200">
-              Uploading {Math.min(progress.done + 1, progress.total)} of{" "}
-              {progress.total}…
+          <div className="relative mt-4 w-full max-w-xs">
+            <p className="text-sm font-semibold">
+              Hanging {Math.min(progress.done + 1, progress.total)} of {progress.total}…
             </p>
             <div
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={percent}
-              className="relative mt-3 h-1.5 w-full overflow-hidden rounded-full bg-zinc-800"
+              className="relative mt-3 h-2 w-full overflow-hidden rounded-full bg-white/30"
             >
               <div
-                className="h-full rounded-full bg-linear-to-r from-violet-500 to-cyan-400 transition-[width] duration-300"
+                className="h-full rounded-full bg-white transition-[width] duration-300"
                 style={{ width: `${Math.max(percent, 8)}%` }}
               />
-              <div className="absolute inset-0 animate-pulse bg-white/5" />
+              <div className="absolute inset-0 animate-pulse bg-white/20" />
             </div>
           </div>
         ) : (
           <>
-            <p className="mt-4 text-sm font-medium text-zinc-200">
-              Drop screenshots here, or{" "}
-              <span className="text-violet-400">browse</span>
+            <p className="relative mt-4 text-sm font-semibold">
+              {isDragging ? "Let go to add them ✿" : "Drop photos here, or browse"}
             </p>
-            <p className="mt-1 text-xs text-zinc-500">
-              Or paste with{" "}
-              <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">
-                Ctrl
-              </kbd>{" "}
-              +{" "}
-              <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">
-                V
-              </kbd>{" "}
-              · PNG, JPG, WEBP, GIF up to 10 MB
+            <p className="relative mt-1 font-hand text-lg text-white/85">
+              or paste with Ctrl + V
+            </p>
+            <p className="relative mt-1 text-[11px] tracking-wide text-white/70 uppercase">
+              PNG · JPG · WEBP · GIF · up to 10 MB
             </p>
           </>
         )}
@@ -177,7 +184,7 @@ export function UploadZone() {
       {errors.length > 0 && (
         <ul
           role="alert"
-          className="mt-3 space-y-1 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+          className="mt-3 space-y-1 rounded-2xl bg-white/95 px-4 py-3 text-sm text-red-600 shadow-soft"
         >
           {errors.map((err, i) => (
             <li key={i}>{err}</li>
