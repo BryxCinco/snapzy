@@ -85,7 +85,16 @@ export const DEFAULT_CATEGORIES: {
   { name: FALLBACK_CATEGORY_NAME, color: "zinc", description: "Anything that fits none of the other categories.", isFallback: true },
 ];
 
-export type ProcessingStatus = "pending" | "processing" | "done" | "failed";
+// "new" = uploaded but not analyzed yet (waits for "Sort photos").
+export type ProcessingStatus = "new" | "pending" | "processing" | "done" | "failed";
+
+// Marks a fallback "failed" row that really means "new" (before migration 008).
+export const NOT_ANALYZED_YET = "Not analyzed yet.";
+
+// Rough per-photo AI time, used for the "about N sec" estimate. Bulk runs
+// process BULK_CONCURRENCY photos at once (see dashboard/actions.ts).
+export const SECONDS_PER_PHOTO = 7;
+export const BULK_CONCURRENCY = 3;
 
 // A healthy analysis takes seconds, but bulk runs queue several at once.
 // After this long in pending/processing we assume the job died and offer a retry.

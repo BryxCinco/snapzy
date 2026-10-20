@@ -101,6 +101,8 @@ export function ScreenshotCard({
   const processing =
     !screenshot.stuck &&
     (screenshot.status === "pending" || screenshot.status === "processing");
+  // Uploaded but not analyzed yet: waits for "Sort photos" (or the button below).
+  const isNew = screenshot.status === "new";
   const canRetry =
     screenshot.status === "failed" ||
     (screenshot.stuck && screenshot.status !== "done");
@@ -395,19 +397,25 @@ export function ScreenshotCard({
           </p>
         )}
 
-        {canRetry && !processing && (
-          <div className="mt-2 flex items-center justify-between gap-2 rounded-2xl bg-red-50 px-3 py-2">
-            <p className="text-xs text-red-600">
-              {screenshot.stuck ? t("card.tooLong") : t("card.failed")}
+        {(canRetry || isNew) && !processing && (
+          <div
+            className={`mt-2 flex items-center justify-between gap-2 rounded-2xl px-3 py-2 ${
+              isNew ? "bg-brand-soft" : "bg-red-50 dark:bg-red-500/10"
+            }`}
+          >
+            <p className={`text-xs ${isNew ? "text-brand-deep" : "text-red-600"}`}>
+              {isNew ? t("card.notSorted") : screenshot.stuck ? t("card.tooLong") : t("card.failed")}
             </p>
             <button
               type="button"
               onClick={handleRetry}
               disabled={isRetrying}
-              className="flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-xs font-semibold text-red-600 shadow-soft transition hover:bg-red-100 disabled:opacity-60"
+              className={`flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-xs font-semibold shadow-soft transition disabled:opacity-60 ${
+                isNew ? "text-brand-deep hover:bg-brand/10" : "text-red-600 hover:bg-red-100"
+              }`}
             >
               {isRetrying && <Spinner />}
-              {screenshot.summary ? t("action.retry") : t("action.runAi")}
+              {isNew ? t("action.sort") : screenshot.summary ? t("action.retry") : t("action.runAi")}
             </button>
           </div>
         )}

@@ -3,7 +3,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { STUCK_AFTER_MS } from "@/lib/categories";
+// BULK_CONCURRENCY: parallel AI calls during a bulk run; higher trips
+// Gemini rate limits.
+import { BULK_CONCURRENCY, NOT_ANALYZED_YET, STUCK_AFTER_MS } from "@/lib/categories";
 import { createClient } from "@/lib/supabase/server";
 import { isAllowedImageType, MAX_UPLOAD_BYTES } from "@/lib/uploads";
 import { processScreenshot } from "./process-screenshot";
@@ -16,8 +18,6 @@ export type BulkAnalyzeResult =
 const BUCKET = "screenshots";
 // Caps one bulk request so a single click can't fire hundreds of AI calls.
 const MAX_BULK_IDS = 100;
-// Parallel AI calls during a bulk run; higher trips Gemini rate limits.
-const BULK_CONCURRENCY = 3;
 
 // Keep storage keys URL-safe; the original name is stored separately.
 function sanitizeFilename(name: string) {
@@ -53,46 +53,40 @@ export async function uploadScreenshot(
 
   // RLS on storage requires the first folder to be the user's id.
   const storagePath = `${user.id}/${Date.now()}_${sanitizeFilename(file.name)}`;
-  const image = new Uint8Array(await file.arrayBuffer());
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(storagePath, image, { contentType: file.type, upsert: false });
+    .upload(storagePath, file, { contentType: file.type, upsert: false });
   if (uploadError) {
     return { ok: false, error: `${file.name}: ${uploadError.message}` };
   }
 
   // Store the path, not a URL: the bucket is private and signed URLs expire.
   // They are generated fresh each time the gallery renders.
-  const { data: row, error: insertError } = await supabase
+  // Uploads are not analyzed automatically: they wait as "new" until the
+  // user presses "Sort photos".
+  const row = {
+    user_id: user.id,
+    storage_path: storagePath,
+    original_filename: file.name,
+    file_size: file.size,
+    mime_type: file.type,
+  };
+  let { error: insertError } = await supabase
     .from("screenshots")
-    .insert({
-      user_id: user.id,
-      storage_path: storagePath,
-      original_filename: file.name,
-      file_size: file.size,
-      mime_type: file.type,
-      status: "pending",
-    })
-    .select("id")
-    .single();
+    .insert({ ...row, status: "new" });
+  // 23514 = check violation: migration 008 (status 'new') not applied yet.
+  // Fall back to a marked "failed" row, which the gallery shows as new.
+  if (insertError?.code === "23514") {
+    ({ error: insertError } = await supabase
+      .from("screenshots")
+      .insert({ ...row, status: "failed", processing_error: NOT_ANALYZED_YET }));
+  }
   if (insertError) {
     // Don't leave an orphaned file behind if the row couldn't be saved.
     await supabase.storage.from(BUCKET).remove([storagePath]);
     return { ok: false, error: `${file.name}: ${insertError.message}` };
   }
-
-  // Run the slow AI call after the response is sent, so the card appears
-  // right away with a "processing" spinner. We already have the bytes, so
-  // there's no need to download the file again.
-  after(() =>
-    processScreenshot(supabase, {
-      screenshotId: row.id,
-      userId: user.id,
-      image,
-      mediaType: file.type,
-    }),
-  );
 
   revalidatePath("/dashboard");
   return { ok: true };
@@ -118,11 +112,11 @@ type QueueRow = {
   processing_started_at: string | null;
 };
 
-// Failed items, items stuck mid-run, and finished items without a category
+// New (never analyzed) and failed items, items stuck mid-run, and finished items without a category
 // (e.g. analyzed before categories existed). Fresh pending/processing rows
 // are skipped: a background job is already working on them.
 function needsAnalysis(row: QueueRow, now: number) {
-  if (row.status === "failed") return true;
+  if (row.status === "new" || row.status === "failed") return true;
   if (row.status === "pending" || row.status === "processing") {
     const started = row.processing_started_at
       ? new Date(row.processing_started_at).getTime()

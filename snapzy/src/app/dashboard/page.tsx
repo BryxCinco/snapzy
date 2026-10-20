@@ -3,18 +3,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { T } from "@/components/preferences";
 import type { ScreenshotCardData } from "@/components/screenshot-card";
-import { type ProcessingStatus, STUCK_AFTER_MS } from "@/lib/categories";
+import { NOT_ANALYZED_YET, type ProcessingStatus, STUCK_AFTER_MS } from "@/lib/categories";
 import { getUserCategories } from "@/lib/categories-server";
 import { parseMetadata } from "@/lib/metadata";
 import { createClient } from "@/lib/supabase/server";
 import { Logo, WatercolorBackdrop } from "@/components/watercolor";
 import { GalleryView } from "./gallery-view";
 import { MobileNav } from "./mobile-nav";
-import { TimeGreeting } from "./time-greeting";
 import { SearchBar, SearchBarFallback } from "./search-bar";
-import { UploadZone } from "./upload-zone";
 
 export const metadata: Metadata = { title: "Dashboard · Snapzy" };
 
@@ -47,30 +44,7 @@ export default function DashboardPage() {
       </header>
 
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-4 pb-32 sm:px-6 sm:pt-6 sm:pb-16">
-        {/* Compact banner so the albums are visible without scrolling. */}
-        <section className="relative overflow-hidden rounded-4xl bg-linear-to-br from-brand via-lilac to-blush px-5 py-5 text-white shadow-lift sm:px-7 sm:py-6">
-          <div aria-hidden className="wash animate-drift -top-16 -right-10 h-72 w-72 bg-white/50" />
-          <div aria-hidden className="wash animate-drift -bottom-24 left-1/3 h-64 w-96 bg-lilac" style={{ animationDelay: "-8s" }} />
-          <div className="relative grid items-center gap-5 sm:grid-cols-[1fr_minmax(0,22rem)]">
-            <div className="min-w-0">
-              <Suspense fallback={<p className="font-hand text-2xl text-white/90">hello,</p>}>
-                <HeroGreeting />
-              </Suspense>
-              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                <T k="hero.title" />
-              </h1>
-              <p className="mt-1 hidden max-w-md text-sm leading-relaxed text-white/85 md:block">
-                <T k="hero.subtitle" />
-              </p>
-            </div>
-            {/* Phones upload with the big + in the bottom bar instead. */}
-            <div className="hidden sm:block">
-              <UploadZone />
-            </div>
-          </div>
-        </section>
-
-        <div className="mt-5">
+        <div>
           <Suspense fallback={<GallerySkeleton />}>
             <Gallery />
           </Suspense>
@@ -134,13 +108,8 @@ async function CurrentUser() {
   );
 }
 
-async function HeroGreeting() {
-  const user = await getSessionUser();
-  return <TimeGreeting name={firstNameFrom(user.email)} />;
-}
-
 const SCREENSHOT_COLUMNS =
-  "id, storage_path, original_filename, created_at, summary, ocr_text, category_id, status, processing_started_at, screenshot_tags(tags(name))";
+  "id, storage_path, original_filename, created_at, summary, ocr_text, category_id, status, processing_error, processing_started_at, screenshot_tags(tags(name))";
 
 async function loadScreenshots(supabase: Awaited<ReturnType<typeof createClient>>) {
   const query = (columns: string) =>
@@ -167,6 +136,7 @@ type ScreenshotRow = {
   ocr_text: string | null;
   category_id: string | null;
   status: string | null;
+  processing_error: string | null;
   processing_started_at: string | null;
   metadata?: unknown;
   screenshot_tags: unknown;
@@ -209,7 +179,7 @@ async function Gallery() {
   }
 
   if (!rows || rows.length === 0) {
-    return <GalleryView cards={[]} categories={categories} />;
+    return <GalleryView cards={[]} categories={categories} firstName={firstNameFrom(user.email)} />;
   }
 
   // The bucket is private, so sign every path in one round trip.
@@ -229,7 +199,10 @@ async function Gallery() {
   const cards: ScreenshotCardData[] = rows.flatMap((r) => {
     const url = urlByPath.get(r.storage_path);
     if (!url) return [];
-    const status = (r.status ?? "done") as ProcessingStatus;
+    // Before migration 008, "new" uploads are stored as a marked "failed".
+    const status = (
+      r.status === "failed" && r.processing_error === NOT_ANALYZED_YET ? "new" : (r.status ?? "done")
+    ) as ProcessingStatus;
     const startedAt = new Date(r.processing_started_at ?? r.created_at).getTime();
     return [
       {
@@ -250,7 +223,7 @@ async function Gallery() {
     ];
   });
 
-  return <GalleryView cards={cards} categories={categories} />;
+  return <GalleryView cards={cards} categories={categories} firstName={firstNameFrom(user.email)} />;
 }
 
 // Only called after `await connection()`, so this is per-request time, not a
@@ -274,14 +247,17 @@ const skeletonHeights = ["h-48", "h-72", "h-60", "h-80", "h-52", "h-64", "h-56",
 
 function GallerySkeleton() {
   return (
-    <div className="columns-2 gap-4 md:columns-3 lg:columns-4">
-      {skeletonHeights.map((h, i) => (
-        <div key={i} className="mb-4 break-inside-avoid rounded-3xl bg-card p-2.5 shadow-soft">
-          <div className={`animate-pulse rounded-2xl bg-brand-soft ${h}`} />
-          <div className="mt-3 h-3 w-2/3 animate-pulse rounded-full bg-line" />
-          <div className="mt-2 mb-1 h-2.5 w-1/3 animate-pulse rounded-full bg-line/70" />
-        </div>
-      ))}
-    </div>
+    <>
+      <div className="hero-wash mb-6 h-44 animate-pulse rounded-4xl opacity-60" />
+      <div className="columns-2 gap-4 md:columns-3 lg:columns-4">
+        {skeletonHeights.map((h, i) => (
+          <div key={i} className="mb-4 break-inside-avoid rounded-3xl bg-card p-2.5 shadow-soft">
+            <div className={`animate-pulse rounded-2xl bg-brand-soft ${h}`} />
+            <div className="mt-3 h-3 w-2/3 animate-pulse rounded-full bg-line" />
+            <div className="mt-2 mb-1 h-2.5 w-1/3 animate-pulse rounded-full bg-line/70" />
+          </div>
+        ))}
+      </div>
+    </>
   );
 }

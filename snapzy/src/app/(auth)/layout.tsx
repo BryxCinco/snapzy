@@ -6,11 +6,11 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
       <WatercolorBackdrop />
 
       {/* Watercolor panel, like the reference's welcome screen. */}
-      <aside className="relative hidden overflow-hidden bg-linear-to-br from-brand via-lilac to-blush p-10 text-white lg:flex lg:flex-col">
-        <div aria-hidden className="wash animate-drift -top-20 -left-10 h-96 w-96 bg-white/40" />
+      <aside className="hero-wash text-shadow-soft relative hidden overflow-hidden p-10 text-white lg:flex lg:flex-col">
+        <div aria-hidden className="wash animate-drift -top-20 -left-10 h-96 w-96 bg-white/20" />
         <div
           aria-hidden
-          className="wash animate-drift right-0 bottom-0 h-80 w-md bg-lilac"
+          className="wash animate-drift right-0 bottom-0 h-80 w-md bg-[#c47596]/40"
           style={{ animationDelay: "-9s" }}
         />
         <div className="relative">
@@ -26,12 +26,12 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
             <br />
             of moments
           </h2>
-          <p className="mt-8 max-w-sm leading-relaxed text-white/85">
+          <p className="mt-8 max-w-sm leading-relaxed text-white/95">
             Every screenshot you keep is a little note to your future self. We&apos;ll
             frame it, label it and hang it where you can find it again.
           </p>
         </div>
-        <p className="relative font-hand text-2xl text-white/80">— made for the camera-roll hoarder in you ✿</p>
+        <p className="relative font-hand text-2xl text-white/90">— made for the camera-roll hoarder in you ✿</p>
       </aside>
 
       <div className="relative flex items-center justify-center px-5 py-14">{children}</div>

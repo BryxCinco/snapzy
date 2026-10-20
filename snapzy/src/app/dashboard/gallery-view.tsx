@@ -13,6 +13,7 @@ import { Toaster } from "@/components/toast";
 import { colorStyles, type UserCategory } from "@/lib/categories";
 import { analyzeMultipleScreenshots, searchScreenshots } from "./actions";
 import { ManageCategoriesDialog, openManageAlbums } from "./manage-categories";
+import { GalleryHero } from "./gallery-hero";
 import { ProcessingPoller } from "./processing-poller";
 
 // "all" = every photo; "unsorted" = no category yet (still analyzing or
@@ -35,7 +36,7 @@ function isProcessing(c: ScreenshotCardData) {
 
 // Mirrors needsAnalysis() on the server, which has the final say.
 function needsAnalysis(c: ScreenshotCardData) {
-  if (c.status === "failed" || c.stuck) return true;
+  if (c.status === "new" || c.status === "failed" || c.stuck) return true;
   if (isProcessing(c)) return false;
   return c.categoryId === null;
 }
@@ -128,9 +129,11 @@ function useSearch(query: string, doneCount: number) {
 export function GalleryView({
   cards,
   categories,
+  firstName,
 }: {
   cards: ScreenshotCardData[];
   categories: UserCategory[];
+  firstName: string;
 }) {
   const t = useT();
   const searchParams = useSearchParams();
@@ -140,6 +143,8 @@ export function GalleryView({
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
+  // Size of the latest "Sort" run, for the banner's progress bar.
+  const [runTotal, setRunTotal] = useState<number | null>(null);
   const [isAnalyzing, startAnalyze] = useTransition();
 
   const search = useSearch(query, cards.filter((c) => c.status === "done").length);
@@ -214,6 +219,7 @@ export function GalleryView({
         }
         queued += result.queued;
       }
+      if (queued > 0) setRunTotal(queued);
       setNotice(
         queued === 0 ? t("notice.nothing") : t("notice.analyzing", { count: queued }),
       );
@@ -281,6 +287,20 @@ export function GalleryView({
   return (
     <>
       <Toaster />
+      {/* Home only: inside an album or a search the photos come first. */}
+      {!searching && !openAlbum && (
+        <GalleryHero
+          cards={cards}
+          albumCount={categories.length}
+          firstName={firstName}
+          toSort={cards.filter(needsAnalysis)}
+          processingCount={cards.filter(isProcessing).length}
+          runTotal={runTotal}
+          sorting={isAnalyzing}
+          onSort={() => analyze(cards.filter(needsAnalysis).map((c) => c.id), false)}
+          onOpenPhoto={showPhoto}
+        />
+      )}
       <ProcessingPoller active={cards.some(isProcessing)} />
       <ScreenshotModal
         screenshot={openPhoto}

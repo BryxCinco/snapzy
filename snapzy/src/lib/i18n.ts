@@ -18,7 +18,17 @@ const en = {
 
   // Dashboard hero
   "hero.title": "Your gallery",
-  "hero.subtitle": "Drop in screenshots and photos. AI reads them, writes a caption and hangs each one in the right album.",
+  "hero.subtitle": "Drop in screenshots and photos, then press Sort. AI reads them, writes a caption and hangs each one in the right album.",
+  "hero.sort": "Sort photos",
+  "hero.sortCount": "Sort {count} photos",
+  "hero.sorting": "Sorting {count} photos…",
+  "hero.waiting": "{count} waiting",
+  "hero.allSorted": "All sorted ✿",
+  "hero.about": "about {time}",
+  "hero.left": "{time} left",
+  "hero.shuffle": "Shuffle photos",
+  "time.sec": "{n} sec",
+  "time.min": "{n} min",
 
   // Header / nav
   "nav.search": "Find anything in your photos…",
@@ -64,6 +74,7 @@ const en = {
   "action.clearSelection": "Clear selection",
   "action.picked": "picked",
   "action.view": "View",
+  "action.sort": "Sort",
   "action.retry": "Retry",
   "action.runAi": "Run AI",
   "action.copyText": "Copy text",
@@ -78,6 +89,7 @@ const en = {
   "card.moved": "Moved to {name}",
   "card.moveTo": "move to…",
   "card.confirmDelete": "Delete this photo? This can't be undone.",
+  "card.notSorted": "Not sorted yet.",
 
   // Search
   "search.looking": "looking…",
@@ -156,7 +168,17 @@ const tl: Record<MessageKey, string> = {
   "greet.hello": "kumusta",
 
   "hero.title": "Ang iyong gallery",
-  "hero.subtitle": "Ihulog dito ang mga screenshot at litrato. Babasahin ito ng AI, lalagyan ng caption at isasabit sa tamang album.",
+  "hero.subtitle": "Ihulog dito ang mga screenshot at litrato, tapos pindutin ang Ayusin. Babasahin ito ng AI, lalagyan ng caption at isasabit sa tamang album.",
+  "hero.sort": "Ayusin ang mga litrato",
+  "hero.sortCount": "Ayusin ang {count}",
+  "hero.sorting": "Inaayos ang {count} litrato…",
+  "hero.waiting": "{count} naghihintay",
+  "hero.allSorted": "Ayos na lahat ✿",
+  "hero.about": "mga {time}",
+  "hero.left": "{time} pa",
+  "hero.shuffle": "Ibahin ang mga litrato",
+  "time.sec": "{n} seg",
+  "time.min": "{n} min",
 
   "nav.search": "Hanapin ang kahit ano sa mga litrato mo…",
   "nav.home": "Home",
@@ -198,6 +220,7 @@ const tl: Record<MessageKey, string> = {
   "action.clearSelection": "Alisin ang pili",
   "action.picked": "napili",
   "action.view": "Tingnan",
+  "action.sort": "Ayusin",
   "action.retry": "Subukan ulit",
   "action.runAi": "Patakbuhin ang AI",
   "action.copyText": "Kopyahin ang text",
@@ -211,6 +234,7 @@ const tl: Record<MessageKey, string> = {
   "card.moved": "Inilipat sa {name}",
   "card.moveTo": "ilipat sa…",
   "card.confirmDelete": "Burahin ang litratong ito? Hindi na ito maibabalik.",
+  "card.notSorted": "Hindi pa naaayos.",
 
   "search.looking": "hinahanap…",
   "search.found": "{count} nakita",

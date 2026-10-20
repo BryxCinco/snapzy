@@ -2,7 +2,7 @@ import Link from "next/link";
 
 // Decorative watercolor washes that slowly drift behind the content.
 export function WatercolorBackdrop({ intensity = "soft" }: { intensity?: "soft" | "bold" }) {
-  const o = intensity === "bold" ? "opacity-80" : "opacity-45";
+  const o = intensity === "bold" ? "opacity-60" : "opacity-35";
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
       <div className={`wash animate-drift -top-32 -left-24 h-[28rem] w-[34rem] bg-brand/50 ${o}`} />
