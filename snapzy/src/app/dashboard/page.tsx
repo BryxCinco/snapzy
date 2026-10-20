@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import type { ScreenshotCardData } from "@/components/screenshot-card";
 import { NOT_ANALYZED_YET, type ProcessingStatus, STUCK_AFTER_MS } from "@/lib/categories";
+import { getAvatarUrl } from "@/lib/avatar-server";
 import { getUserCategories } from "@/lib/categories-server";
 import { parseMetadata } from "@/lib/metadata";
 import { createClient } from "@/lib/supabase/server";
@@ -94,15 +95,21 @@ function firstNameFrom(email: string | undefined) {
 async function CurrentUser() {
   const user = await getSessionUser();
   const name = firstNameFrom(user.email);
+  const avatarUrl = await getAvatarUrl(await createClient(), user);
   return (
     <span className="flex items-center gap-2.5">
       <span className="hidden max-w-44 truncate text-sm text-mute lg:inline">{user.email}</span>
       <Link
         href="/dashboard/settings"
         title={user.email}
-        className="grid h-9 w-9 place-items-center rounded-full bg-linear-to-br from-brand to-lilac text-sm font-semibold text-white shadow-soft transition hover:scale-105"
+        className="grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-linear-to-br from-brand to-lilac text-sm font-semibold text-white shadow-soft ring-2 ring-card transition hover:scale-105"
       >
-        {name[0]}
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          name[0]
+        )}
       </Link>
     </span>
   );

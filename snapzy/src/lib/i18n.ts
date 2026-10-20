@@ -118,12 +118,20 @@ const en = {
   "modal.showPasswords": "Show passwords",
   "modal.hidePasswords": "Hide passwords",
 
+  // Auth
+  "auth.showPassword": "Show password",
+  "auth.hidePassword": "Hide password",
+
   // Settings
   "settings.title": "Settings",
   "settings.note": "make it yours",
   "settings.back": "Back to gallery",
   "settings.account": "Account",
   "settings.email": "Email",
+  "settings.changePhoto": "Change photo",
+  "settings.removePhoto": "Remove photo",
+  "settings.photoUpdated": "Profile photo updated",
+  "settings.photoRemoved": "Profile photo removed",
   "settings.joined": "Joined",
   "settings.library": "Library",
   "settings.libraryValue": "{photos} photos · {albums} albums",
@@ -264,11 +272,18 @@ const tl: Record<MessageKey, string> = {
   "modal.showPasswords": "Ipakita ang password",
   "modal.hidePasswords": "Itago ang password",
 
+  "auth.showPassword": "Ipakita ang password",
+  "auth.hidePassword": "Itago ang password",
+
   "settings.title": "Settings",
   "settings.note": "gawin mong iyo",
   "settings.back": "Bumalik sa gallery",
   "settings.account": "Account",
   "settings.email": "Email",
+  "settings.changePhoto": "Palitan ang litrato",
+  "settings.removePhoto": "Alisin ang litrato",
+  "settings.photoUpdated": "Na-update ang profile photo",
+  "settings.photoRemoved": "Naalis ang profile photo",
   "settings.joined": "Sumali noong",
   "settings.library": "Library",
   "settings.libraryValue": "{photos} litrato · {albums} album",

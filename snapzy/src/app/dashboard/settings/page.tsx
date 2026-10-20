@@ -4,6 +4,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { logout } from "@/app/(auth)/actions";
 import { WatercolorBackdrop } from "@/components/watercolor";
+import { getAvatarUrl } from "@/lib/avatar-server";
 import { createClient } from "@/lib/supabase/server";
 import { SettingsHeader, SettingsView } from "./settings-view";
 
@@ -32,14 +33,16 @@ async function AccountSettings() {
   if (!user) redirect("/login");
 
   // head: true → counts only, no rows. RLS scopes both to this user.
-  const [photos, albums] = await Promise.all([
+  const [photos, albums, avatarUrl] = await Promise.all([
     supabase.from("screenshots").select("id", { count: "exact", head: true }),
     supabase.from("categories").select("id", { count: "exact", head: true }),
+    getAvatarUrl(supabase, user),
   ]);
 
   return (
     <SettingsView
       email={user.email ?? ""}
+      avatarUrl={avatarUrl}
       joinedAt={user.created_at}
       photoCount={photos.count ?? 0}
       albumCount={albums.count ?? 0}

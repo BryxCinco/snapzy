@@ -1,13 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { type ThemeChoice, useLang, useT, useTheme } from "@/components/preferences";
+import { PasswordInput } from "@/components/password-input";
 import { Spinner } from "@/components/screenshot-card";
 import { toast, Toaster } from "@/components/toast";
 import { Logo } from "@/components/watercolor";
 import { LANGUAGES, type MessageKey } from "@/lib/i18n";
-import { deleteAccount, deleteAllPhotos, resetCategories, updatePassword } from "./actions";
+import {
+  deleteAccount,
+  deleteAllPhotos,
+  removeAvatar,
+  resetCategories,
+  updatePassword,
+  uploadAvatar,
+} from "./actions";
 
 const APP_VERSION = "0.1.0";
 
@@ -42,12 +50,14 @@ function CardTitle({ title, hint }: { title: string; hint?: string }) {
 
 export function SettingsView({
   email,
+  avatarUrl,
   joinedAt,
   photoCount,
   albumCount,
   logout,
 }: {
   email: string;
+  avatarUrl: string | null;
   joinedAt: string;
   photoCount: number;
   albumCount: number;
@@ -72,9 +82,7 @@ export function SettingsView({
         <section className={`${CARD} animate-rise md:col-span-4`}>
           <CardTitle title={t("settings.account")} />
           <div className="flex items-center gap-4">
-            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-linear-to-br from-brand to-lilac text-xl font-semibold text-white shadow-soft">
-              {(email[0] ?? "?").toUpperCase()}
-            </span>
+            <AvatarEditor email={email} avatarUrl={avatarUrl} />
             <dl className="grid min-w-0 flex-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
               <Info label={t("settings.email")} value={email} />
               <Info label={t("settings.joined")} value={joined} />
@@ -205,8 +213,8 @@ function PasswordForm() {
       }}
       className="mt-5 flex flex-wrap items-center gap-2"
     >
-      <input
-        type="password"
+      <PasswordInput
+        wrapperClassName="sm:max-w-xs"
         autoComplete="new-password"
         autoFocus
         required
@@ -215,7 +223,7 @@ function PasswordForm() {
         onChange={(e) => setPassword(e.target.value)}
         placeholder={t("settings.passwordNew")}
         aria-label={t("settings.passwordNew")}
-        className="h-10 min-w-0 flex-1 rounded-full bg-paper px-5 text-sm text-ink ring-1 ring-line outline-none placeholder:text-mute/70 focus:ring-2 focus:ring-brand sm:max-w-xs"
+        className="h-10 rounded-full bg-paper px-5 text-sm text-ink ring-1 ring-line outline-none placeholder:text-mute/70 focus:ring-2 focus:ring-brand"
       />
       <button
         type="submit"
@@ -431,8 +439,8 @@ function DeleteAccount({ email }: { email: string }) {
         >
           {/* Hidden username field helps password managers fill the right entry. */}
           <input type="email" value={email} readOnly hidden autoComplete="username" />
-          <input
-            type="password"
+          <PasswordInput
+            wrapperClassName="sm:max-w-sm"
             autoComplete="current-password"
             autoFocus
             required
@@ -440,7 +448,7 @@ function DeleteAccount({ email }: { email: string }) {
             onChange={(e) => setPassword(e.target.value)}
             placeholder={t("settings.passwordToDelete")}
             aria-label={t("settings.passwordToDelete")}
-            className="h-10 min-w-0 flex-1 rounded-full bg-card px-5 text-sm text-ink ring-1 ring-red-200 outline-none placeholder:text-mute/70 focus:ring-2 focus:ring-red-400 sm:max-w-sm dark:ring-red-500/30"
+            className="h-10 rounded-full bg-card px-5 text-sm text-ink ring-1 ring-red-200 outline-none placeholder:text-mute/70 focus:ring-2 focus:ring-red-400 dark:ring-red-500/30"
           />
           <button
             type="submit"
@@ -464,6 +472,96 @@ function DeleteAccount({ email }: { email: string }) {
           {error && <p className="w-full text-sm text-red-600">{error}</p>}
         </form>
       )}
+    </div>
+  );
+}
+
+// Round profile photo with a camera button; falls back to the initial.
+function AvatarEditor({ email, avatarUrl }: { email: string; avatarUrl: string | null }) {
+  const t = useT();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function upload(file: File) {
+    setError(null);
+    const formData = new FormData();
+    formData.append("avatar", file);
+    startTransition(async () => {
+      const result = await uploadAvatar(formData);
+      if (result.ok) toast(t("settings.photoUpdated"));
+      else setError(result.error);
+    });
+  }
+
+  function remove() {
+    setError(null);
+    startTransition(async () => {
+      const result = await removeAvatar();
+      if (result.ok) toast(t("settings.photoRemoved"));
+      else setError(result.error);
+    });
+  }
+
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        disabled={pending}
+        aria-label={t("settings.changePhoto")}
+        title={t("settings.changePhoto")}
+        className="group relative h-20 w-20 overflow-hidden rounded-full bg-linear-to-br from-brand to-lilac text-2xl font-semibold text-white shadow-soft ring-4 ring-card transition hover:scale-105"
+      >
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className="grid h-full w-full place-items-center">{(email[0] ?? "?").toUpperCase()}</span>
+        )}
+        <span
+          className={`absolute inset-0 grid place-items-center bg-ink/45 text-white transition ${
+            pending ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+          }`}
+        >
+          {pending ? (
+            <Spinner />
+          ) : (
+            <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-6 w-6">
+              <path strokeLinejoin="round" d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1.5-2h6L16.5 7h2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5v-9Z" />
+              <circle cx="12" cy="13" r="3.5" />
+            </svg>
+          )}
+        </span>
+      </button>
+      {/* Text buttons too: the hover overlay never shows on touch screens. */}
+      <div className="flex items-center gap-2 text-xs">
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={pending}
+          className="font-semibold text-brand-deep hover:underline"
+        >
+          {t("settings.changePhoto")}
+        </button>
+        {avatarUrl && (
+          <button type="button" onClick={remove} disabled={pending} className="text-mute hover:text-red-600">
+            {t("settings.removePhoto")}
+          </button>
+        )}
+      </div>
+      {error && <p className="max-w-40 text-center text-xs text-red-600">{error}</p>}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        hidden
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) upload(file);
+          e.target.value = "";
+        }}
+      />
     </div>
   );
 }

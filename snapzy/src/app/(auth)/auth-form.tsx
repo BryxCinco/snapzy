@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { PasswordInput } from "@/components/password-input";
 import { Logo } from "@/components/watercolor";
 import { login, signup, type AuthState } from "./actions";
 
@@ -62,10 +63,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
           </Field>
 
           <Field label="Password" htmlFor="password">
-            <input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               autoComplete={mode === "login" ? "current-password" : "new-password"}
               required
               minLength={6}

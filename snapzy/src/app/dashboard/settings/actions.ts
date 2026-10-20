@@ -3,12 +3,15 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import sharp from "sharp";
+import { AVATAR_BUCKET, avatarPathOf } from "@/lib/avatar-server";
 import {
   fallbackCategory,
   getUserCategories,
   seedDefaultCategories,
 } from "@/lib/categories-server";
 import { createClient } from "@/lib/supabase/server";
+import { isAllowedImageType } from "@/lib/uploads";
 
 export type SettingsResult = { ok: true } | { ok: false; error: string };
 
@@ -88,6 +91,67 @@ export async function deleteAccount(password: string): Promise<SettingsResult> {
   await supabase.auth.signOut({ scope: "local" });
   revalidatePath("/", "layout");
   redirect("/?account=deleted");
+}
+
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+const AVATAR_SIZE = 256;
+
+/** Uploads a new profile photo (cropped to a 256px square WebP). */
+export async function uploadAvatar(formData: FormData): Promise<SettingsResult> {
+  const file = formData.get("avatar");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "No image received." };
+  }
+  if (!isAllowedImageType(file.type)) {
+    return { ok: false, error: "Use a PNG, JPG, WEBP or GIF image." };
+  }
+  if (file.size > MAX_AVATAR_BYTES) {
+    return { ok: false, error: "Profile photos can be up to 5 MB." };
+  }
+
+  const { supabase, user } = await requireUser();
+  if (!user) return { ok: false, error: "You are not logged in." };
+
+  let webp: Buffer;
+  try {
+    webp = await sharp(Buffer.from(await file.arrayBuffer()))
+      .rotate() // honor EXIF orientation from phone photos
+      .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: "cover", position: "attention" })
+      .webp({ quality: 85 })
+      .toBuffer();
+  } catch {
+    return { ok: false, error: "That image couldn't be read." };
+  }
+
+  const path = `${user.id}/avatar-${Date.now()}.webp`;
+  const { error: uploadError } = await supabase.storage
+    .from(AVATAR_BUCKET)
+    .upload(path, webp, { contentType: "image/webp", upsert: false });
+  if (uploadError) return { ok: false, error: uploadError.message };
+
+  const previous = avatarPathOf(user);
+  const { error: metaError } = await supabase.auth.updateUser({ data: { avatar_path: path } });
+  if (metaError) {
+    await supabase.storage.from(AVATAR_BUCKET).remove([path]);
+    return { ok: false, error: metaError.message };
+  }
+  if (previous) await supabase.storage.from(AVATAR_BUCKET).remove([previous]);
+
+  revalidatePath("/dashboard", "layout");
+  return { ok: true };
+}
+
+export async function removeAvatar(): Promise<SettingsResult> {
+  const { supabase, user } = await requireUser();
+  if (!user) return { ok: false, error: "You are not logged in." };
+
+  const previous = avatarPathOf(user);
+  const { error } = await supabase.auth.updateUser({ data: { avatar_path: null } });
+  if (error) return { ok: false, error: error.message };
+  if (previous) await supabase.storage.from(AVATAR_BUCKET).remove([previous]);
+
+  revalidatePath("/dashboard", "layout");
+  return { ok: true };
 }
 
 export async function updatePassword(newPassword: string): Promise<SettingsResult> {
