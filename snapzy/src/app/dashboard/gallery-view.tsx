@@ -12,7 +12,7 @@ import { useT } from "@/components/preferences";
 import { Toaster } from "@/components/toast";
 import { colorStyles, type UserCategory } from "@/lib/categories";
 import { analyzeMultipleScreenshots, searchScreenshots } from "./actions";
-import { ManageCategoriesButton } from "./manage-categories";
+import { ManageCategoriesDialog, openManageAlbums } from "./manage-categories";
 import { ProcessingPoller } from "./processing-poller";
 
 // "all" = every photo; "unsorted" = no category yet (still analyzing or
@@ -292,13 +292,7 @@ export function GalleryView({
         nextId={nextId}
       />
 
-      <AlbumSwitcher
-        albums={albums}
-        openKey={searching ? openKey : (openAlbum?.key ?? null)}
-        searching={searching}
-        onOpen={openAlbumKey}
-        manage={<ManageCategoriesButton categories={categories} counts={counts} />}
-      />
+      <ManageCategoriesDialog categories={categories} counts={counts} />
 
       {notice && (
         <p
@@ -396,89 +390,6 @@ export function GalleryView({
   );
 }
 
-// Sticky pill bar under the header: "Albums" home, a chip per non-empty
-// album, and "Manage" for editing categories.
-function AlbumSwitcher({
-  albums,
-  openKey,
-  searching,
-  onOpen,
-  manage,
-}: {
-  albums: Album[];
-  openKey: AlbumKey | null;
-  searching: boolean;
-  onOpen: (key: AlbumKey | null) => void;
-  manage: React.ReactNode;
-}) {
-  // While searching, the first chip means "all results" and the per-album
-  // chips narrow the results, so the separate "All photos" chip is redundant.
-  const chips = albums.filter(
-    (a) => a.cards.length > 0 && !(searching && a.key === "all"),
-  );
-  const homeActive = openKey === null || (searching && openKey === "all");
-  const t = useT();
-
-  const chip = (active: boolean) =>
-    `flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition ${
-      active
-        ? "bg-brand text-white shadow-lift"
-        : "bg-card/80 text-ink/70 ring-1 ring-line hover:-translate-y-0.5 hover:bg-card hover:text-ink"
-    }`;
-
-  return (
-    <nav
-      aria-label="Albums"
-      className="sticky top-16 z-20 -mx-4 mb-6 flex items-center gap-2 bg-paper/80 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6"
-    >
-      <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-1 scrollbar-none">
-        <button
-          type="button"
-          aria-current={homeActive ? "page" : undefined}
-          onClick={() => onOpen(null)}
-          className={chip(homeActive)}
-        >
-          {searching ? (
-            <>
-              <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
-                <circle cx="11" cy="11" r="7" />
-                <path strokeLinecap="round" d="m20 20-3.5-3.5" />
-              </svg>
-              {t("albums.allResults")}
-            </>
-          ) : (
-            <>
-              <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
-                <rect x="3" y="3" width="7" height="7" rx="2" />
-                <rect x="14" y="3" width="7" height="7" rx="2" />
-                <rect x="3" y="14" width="7" height="7" rx="2" />
-                <rect x="14" y="14" width="7" height="7" rx="2" />
-              </svg>
-              {t("albums.home")}
-            </>
-          )}
-        </button>
-        {chips.map((a) => (
-          <button
-            key={a.key}
-            type="button"
-            aria-current={openKey === a.key ? "page" : undefined}
-            onClick={() => onOpen(a.key)}
-            className={chip(openKey === a.key)}
-          >
-            {openKey !== a.key && <span aria-hidden className={`h-2 w-2 rounded-full ${a.dot}`} />}
-            <span className="max-w-40 truncate">{a.label}</span>
-            <span className={`text-xs tabular-nums ${openKey === a.key ? "text-white/75" : "text-mute"}`}>
-              {a.cards.length}
-            </span>
-          </button>
-        ))}
-      </div>
-      {manage}
-    </nav>
-  );
-}
-
 function SectionHeader({
   title,
   note,
@@ -537,11 +448,6 @@ function AlbumGrid({
   const empty = albums.filter((a) => a.cards.length === 0);
   const all = albums.find((a) => a.key === "all");
   const albumCount = filled.length - 1;
-  // Bento: "All photos" is the big 2×2 tile, the fullest album gets a wide
-  // 2×1 tile, everything else is a small square.
-  const widest = filled
-    .filter((a) => a.key !== "all")
-    .sort((a, b) => b.cards.length - a.cards.length)[0]?.key;
 
   return (
     <>
@@ -549,6 +455,22 @@ function AlbumGrid({
         note={t("albums.yourWalls")}
         title={albumCount === 1 ? t("albums.countOne") : t("albums.count", { count: albumCount })}
       >
+        <button
+          type="button"
+          onClick={() => openManageAlbums("new")}
+          className={`${PILL} bg-brand text-white shadow-lift hover:bg-brand-deep`}
+        >
+          <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} className="h-3.5 w-3.5">
+            <path strokeLinecap="round" d="M12 5v14M5 12h14" />
+          </svg>
+          {t("albums.create")}
+        </button>
+        <button type="button" onClick={() => openManageAlbums()} className={PILL_GHOST}>
+          <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-3.5 w-3.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h10M4 17h6m4 0h6M18 7h2M14 4v6m-4 4v6" />
+          </svg>
+          {t("albums.manageAlbums")}
+        </button>
         {all && <DownloadZipLink albumKey="all" count={all.cards.length} />}
         <button type="button" onClick={onReanalyzeAll} disabled={isAnalyzing} className={PILL_GHOST}>
           {isAnalyzing && <Spinner />}
@@ -556,136 +478,93 @@ function AlbumGrid({
         </button>
       </SectionHeader>
 
-      <ul className="grid grid-flow-row-dense auto-rows-fr grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-6">
-        {[...filled, ...empty].map((album, i) => {
-          const size = album.key === "all" ? "big" : album.key === widest && filled.length > 3 ? "wide" : "small";
-          return (
-            <li
-              key={album.key}
-              className={`animate-rise ${
-                size === "big" ? "col-span-2 row-span-2" : size === "wide" ? "col-span-2" : "aspect-square"
-              }`}
-              style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}
-            >
-              <AlbumTile album={album} size={size} onOpen={() => onOpen(album.key)} />
-            </li>
-          );
-        })}
+      <ul className="grid grid-cols-2 gap-x-5 gap-y-9 sm:grid-cols-3 lg:grid-cols-4">
+        {[...filled, ...empty].map((album, i) => (
+          <li key={album.key} className="animate-rise" style={{ animationDelay: `${Math.min(i, 12) * 50}ms` }}>
+            <AlbumCard album={album} onOpen={() => onOpen(album.key)} />
+          </li>
+        ))}
       </ul>
     </>
   );
 }
 
-// Photos stacked like prints on a table; they fan out on hover.
+// Up to three photos stacked like prints on a table; they fan out on hover.
 const STACK = [
-  "rotate-[-7deg] group-hover:-translate-x-[12%] group-hover:rotate-[-12deg]",
-  "rotate-[6deg] group-hover:translate-x-[12%] group-hover:rotate-[11deg]",
-  "rotate-0 group-hover:-translate-y-[5%] group-hover:scale-[1.04]",
+  "rotate-[-7deg] group-hover:-translate-x-[14%] group-hover:rotate-[-13deg]",
+  "rotate-[5deg] group-hover:translate-x-[14%] group-hover:rotate-[11deg]",
+  "rotate-0 group-hover:-translate-y-[6%] group-hover:scale-[1.03]",
 ];
 
-function AlbumTile({
-  album,
-  size,
-  onOpen,
-}: {
-  album: Album;
-  size: "big" | "wide" | "small";
-  onOpen: () => void;
-}) {
+function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
   const t = useT();
   // Last one drawn ends up on top, so the newest photo is the cover.
   const covers = album.cards.slice(0, 3).reverse();
   const analyzing = album.cards.filter(isProcessing).length;
   const isEmpty = album.cards.length === 0;
-  const count =
-    album.cards.length === 1
-      ? t("albums.photosOne")
-      : t("albums.photos", { count: album.cards.length });
-
-  if (isEmpty) {
-    return (
-      <button
-        type="button"
-        disabled
-        className="sketch-border flex h-full w-full flex-col items-center justify-center gap-1 rounded-3xl bg-card/50 p-3 text-center"
-        style={{ ["--c" as string]: "var(--color-line)" }}
-      >
-        <span aria-hidden className={`h-2 w-2 rounded-full ${album.dot}`} />
-        <span className="line-clamp-2 text-xs font-semibold text-mute">{album.label}</span>
-        <span className="hidden font-hand text-base leading-tight text-mute/80 sm:block">
-          {t("albums.empty")}
-        </span>
-      </button>
-    );
-  }
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="group relative block h-full w-full overflow-hidden rounded-3xl bg-card text-left shadow-soft ring-1 ring-line transition duration-300 outline-none hover:-translate-y-1 hover:shadow-lift focus-visible:ring-2 focus-visible:ring-brand"
+      disabled={isEmpty}
+      className="group block w-full text-left outline-none disabled:cursor-default"
     >
-      {/* Soft wash in the album's color behind the prints. */}
-      <span aria-hidden className={`wash -top-1/4 -right-1/4 h-3/4 w-3/4 opacity-40 ${album.dot}`} />
-
-      <span
-        className={`absolute ${
-          size === "big"
-            ? "inset-x-[16%] top-[10%] bottom-[24%]"
-            : size === "wide"
-              ? "inset-x-[30%] top-[10%] bottom-[30%]"
-              : "inset-x-[17%] top-[10%] bottom-[33%]"
-        }`}
-      >
-        {covers.map((c, i) => (
-          <span
-            key={c.id}
-            className={`absolute inset-0 rounded-xl bg-white p-1 pb-2.5 shadow-soft ring-1 ring-black/5 transition duration-500 ease-out sm:p-1.5 sm:pb-4 ${
-              STACK[i + (3 - covers.length)]
-            }`}
+      <div className="relative aspect-square">
+        {isEmpty ? (
+          <div
+            className="sketch-border grid h-full place-items-center rounded-3xl bg-card/50 px-4 text-center"
+            style={{ ["--c" as string]: "var(--color-line)" }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={c.url}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              className="h-full w-full rounded-lg object-cover"
-            />
-          </span>
-        ))}
-      </span>
-
-      {analyzing > 0 && (
-        <span className="absolute top-2 left-2 flex items-center gap-1 rounded-full bg-card px-2 py-0.5 text-[10px] font-semibold text-brand-deep shadow-soft">
-          <Spinner />
-          {analyzing}
-        </span>
-      )}
-
-      <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-linear-to-t from-card via-card/90 to-transparent px-2.5 pt-6 pb-2 sm:px-3.5 sm:pb-3">
-        <span className="min-w-0">
-          {size === "big" && (
-            <span className="block font-hand text-lg leading-none text-brand-deep sm:text-xl">
-              {t("albums.everything")}
-            </span>
-          )}
-          <span
-            className={`flex items-center gap-1.5 font-semibold text-ink transition group-hover:text-brand-deep ${
-              size === "big" ? "text-base sm:text-lg" : "text-[11px] sm:text-sm"
-            }`}
-          >
-            <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full sm:h-2 sm:w-2 ${album.dot}`} />
-            <span className="truncate">{album.label}</span>
-          </span>
-          {size !== "small" && <span className="block text-xs text-mute">{count}</span>}
-        </span>
-        {size === "small" && (
-          <span className="shrink-0 rounded-full bg-paper px-1.5 py-0.5 text-[10px] font-semibold text-mute tabular-nums ring-1 ring-line sm:px-2">
-            {album.cards.length}
+            <p className="font-hand text-xl text-mute">{t("albums.empty")}</p>
+          </div>
+        ) : (
+          covers.map((c, i) => {
+            const slot = STACK[i + (3 - covers.length)];
+            return (
+              <div
+                key={c.id}
+                className={`absolute inset-[7%] rounded-2xl bg-white p-1.5 pb-5 shadow-lift ring-1 ring-line/60 transition duration-500 ease-out ${slot}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={c.url}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full rounded-xl object-cover"
+                />
+              </div>
+            );
+          })
+        )}
+        {album.cards.length > 3 && (
+          <span className="absolute right-1 bottom-1 rounded-full bg-card px-2.5 py-1 text-xs font-semibold text-brand-deep shadow-soft ring-1 ring-line">
+            +{album.cards.length - 3}
           </span>
         )}
-      </span>
+        {analyzing > 0 && (
+          <span className="absolute top-1 left-1 flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-xs font-semibold text-brand-deep shadow-soft">
+            <Spinner />
+            {analyzing}
+          </span>
+        )}
+      </div>
+      <div className="mt-3 flex items-center gap-2 px-1">
+        <span aria-hidden className={`h-2.5 w-2.5 shrink-0 rounded-full ${album.dot}`} />
+        <p
+          className={`truncate font-semibold transition group-hover:text-brand-deep ${
+            isEmpty ? "text-mute" : "text-ink"
+          }`}
+        >
+          {album.label}
+        </p>
+      </div>
+      <p className="mt-0.5 px-1 text-xs text-mute">
+        {album.cards.length === 1
+          ? t("albums.photosOne")
+          : t("albums.photos", { count: album.cards.length })}
+      </p>
     </button>
   );
 }

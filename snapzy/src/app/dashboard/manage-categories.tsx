@@ -11,7 +11,6 @@ import {
   MAX_CATEGORY_NAME,
   type UserCategory,
 } from "@/lib/categories";
-import { useT } from "@/components/preferences";
 import { createCategory, deleteCategory, updateCategory } from "./category-actions";
 import { NAV_EVENTS } from "./mobile-nav";
 
@@ -19,53 +18,55 @@ type Draft = { name: string; color: CategoryColor; description: string };
 
 const EMPTY_DRAFT: Draft = { name: "", color: "violet", description: "" };
 
-export function ManageCategoriesButton({
+type OpenDetail = { mode?: "new" };
+
+/** Opens the albums dialog from anywhere; "new" jumps straight to the form. */
+export function openManageAlbums(mode?: "new") {
+  window.dispatchEvent(new CustomEvent<OpenDetail>(NAV_EVENTS.manage, { detail: { mode } }));
+}
+
+// Mounted once by the gallery. Opened by "Create album" / "Manage albums"
+// and by the mobile nav's Albums tab.
+export function ManageCategoriesDialog({
   categories,
   counts,
 }: {
   categories: UserCategory[];
   counts: Map<string, number>;
 }) {
-  const t = useT();
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // Bumping the key remounts the panel, so each open starts fresh.
+  const [session, setSession] = useState({ key: 0, startNew: false });
 
-  // The mobile nav's "Albums" tab opens this dialog too.
   useEffect(() => {
-    const open = () => dialogRef.current?.showModal();
+    const open = (e: Event) => {
+      const startNew = (e as CustomEvent<OpenDetail | undefined>).detail?.mode === "new";
+      setSession((s) => ({ key: s.key + 1, startNew }));
+      dialogRef.current?.showModal();
+    };
     window.addEventListener(NAV_EVENTS.manage, open);
     return () => window.removeEventListener(NAV_EVENTS.manage, open);
   }, []);
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => dialogRef.current?.showModal()}
-        className="flex shrink-0 items-center gap-1.5 rounded-full bg-card px-4 py-2 text-sm font-medium text-ink/70 shadow-soft ring-1 ring-line transition hover:-translate-y-0.5 hover:text-brand-deep"
-      >
-        <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h10M4 17h6m4 0h6M18 7h2M14 4v6m-4 4v6" />
-        </svg>
-        <span className="hidden sm:inline">{t("albums.manage")}</span>
-      </button>
-
-      {/* Native <dialog>: focus trap, Esc to close and backdrop for free. */}
-      <dialog
-        ref={dialogRef}
-        aria-labelledby="manage-categories-title"
-        onClick={(e) => {
-          // Clicking the backdrop (the dialog element itself) closes it.
-          if (e.target === dialogRef.current) dialogRef.current.close();
-        }}
-        className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-4xl border-0 bg-card p-0 text-ink shadow-lift backdrop:bg-ink/30 backdrop:backdrop-blur-sm"
-      >
-        <ManageCategoriesPanel
-          categories={categories}
-          counts={counts}
-          onClose={() => dialogRef.current?.close()}
-        />
-      </dialog>
-    </>
+    // Native <dialog>: focus trap, Esc to close and backdrop for free.
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="manage-categories-title"
+      onClick={(e) => {
+        // Clicking the backdrop (the dialog element itself) closes it.
+        if (e.target === dialogRef.current) dialogRef.current.close();
+      }}
+      className="m-auto w-[min(32rem,calc(100vw-2rem))] rounded-4xl border-0 bg-card p-0 text-ink shadow-lift backdrop:bg-ink/30 backdrop:backdrop-blur-sm"
+    >
+      <ManageCategoriesPanel
+        key={session.key}
+        startNew={session.startNew}
+        categories={categories}
+        counts={counts}
+        onClose={() => dialogRef.current?.close()}
+      />
+    </dialog>
   );
 }
 
@@ -73,12 +74,14 @@ function ManageCategoriesPanel({
   categories,
   counts,
   onClose,
+  startNew,
 }: {
   categories: UserCategory[];
   counts: Map<string, number>;
   onClose: () => void;
+  startNew: boolean;
 }) {
-  const [editingId, setEditingId] = useState<string | "new" | null>(null);
+  const [editingId, setEditingId] = useState<string | "new" | null>(startNew ? "new" : null);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [error, setError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
