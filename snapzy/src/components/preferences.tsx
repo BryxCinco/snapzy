@@ -102,6 +102,47 @@ export function useT() {
   );
 }
 
+// --- Sort speed -------------------------------------------------------------
+// Seconds per photo measured from this device's finished sort runs (wall
+// clock, so it already includes running BULK_CONCURRENCY at once). Makes the
+// next estimate fit the user's real speed instead of a fixed guess.
+
+const SORT_SPEED_KEY = "snapzy.sortSpeed";
+
+export type SortSpeed = { secondsPerPhoto: number; runs: number };
+
+function parseSortSpeed(raw: string | null): SortSpeed | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as Partial<SortSpeed>;
+    return typeof v.secondsPerPhoto === "number" && v.secondsPerPhoto > 0 && typeof v.runs === "number"
+      ? { secondsPerPhoto: v.secondsPerPhoto, runs: v.runs }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function useSortSpeed(): SortSpeed | null {
+  // Subscribe to the raw string: a stable snapshot for useSyncExternalStore.
+  const raw = useSyncExternalStore(subscribe, () => readStorage(SORT_SPEED_KEY), () => null);
+  return parseSortSpeed(raw);
+}
+
+/** Records a finished run; recent runs count more than old ones. */
+export function recordSortRun(photos: number, ms: number) {
+  if (photos <= 0 || ms <= 0) return;
+  const measured = ms / 1000 / photos;
+  // No real AI call is this fast; a glitchy reading would skew every estimate.
+  if (measured < 0.5) return;
+  const prev = parseSortSpeed(readStorage(SORT_SPEED_KEY));
+  const secondsPerPhoto = prev ? prev.secondsPerPhoto * 0.6 + measured * 0.4 : measured;
+  writeStorage(
+    SORT_SPEED_KEY,
+    JSON.stringify({ secondsPerPhoto: Math.round(secondsPerPhoto * 10) / 10, runs: (prev?.runs ?? 0) + 1 }),
+  );
+}
+
 /** Translated text for use inside Server Components. */
 export function T({ k, vars }: { k: MessageKey; vars?: Record<string, string | number> }) {
   const t = useT();

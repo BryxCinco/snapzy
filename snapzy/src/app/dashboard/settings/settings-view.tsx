@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
-import { type ThemeChoice, useLang, useT, useTheme } from "@/components/preferences";
+import { type ThemeChoice, useLang, useSortSpeed, useT, useTheme } from "@/components/preferences";
 import { PasswordInput } from "@/components/password-input";
 import { Spinner } from "@/components/screenshot-card";
 import { toast, Toaster } from "@/components/toast";
@@ -65,6 +65,7 @@ export function SettingsView({
 }) {
   const t = useT();
   const { lang } = useLang();
+  const speed = useSortSpeed();
   const joined = new Intl.DateTimeFormat(lang === "tl" ? "fil-PH" : "en", {
     dateStyle: "long",
   }).format(new Date(joinedAt));
@@ -83,12 +84,21 @@ export function SettingsView({
           <CardTitle title={t("settings.account")} />
           <div className="flex items-center gap-4">
             <AvatarEditor email={email} avatarUrl={avatarUrl} />
-            <dl className="grid min-w-0 flex-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+            <dl className="grid min-w-0 flex-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
               <Info label={t("settings.email")} value={email} />
               <Info label={t("settings.joined")} value={joined} />
               <Info
                 label={t("settings.library")}
                 value={t("settings.libraryValue", { photos: photoCount, albums: albumCount })}
+              />
+              {/* Learned on this device from real sort runs. */}
+              <Info
+                label={t("settings.sortSpeed")}
+                value={
+                  speed
+                    ? t("settings.sortSpeedValue", { n: speed.secondsPerPhoto, runs: speed.runs })
+                    : t("settings.sortSpeedNone")
+                }
               />
             </dl>
           </div>

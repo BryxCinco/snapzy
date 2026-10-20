@@ -2,8 +2,28 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { analyzeScreenshot } from "@/lib/ai/analyze-screenshot";
 import { fallbackCategory, getUserCategories } from "@/lib/categories-server";
 
+/**
+ * Moves a queued (pending) row to processing. Returns false when the row is
+ * no longer pending, e.g. the user pressed Cancel, so the worker skips it.
+ */
+export async function claimScreenshot(supabase: SupabaseClient, screenshotId: string) {
+  const { data } = await supabase
+    .from("screenshots")
+    .update({
+      status: "processing",
+      processing_error: null,
+      processing_started_at: new Date().toISOString(),
+    })
+    .eq("id", screenshotId)
+    .eq("status", "pending")
+    .select("id");
+  return (data?.length ?? 0) > 0;
+}
+
 // Not a Server Action (no "use server"): only called from actions.ts, so it
-// can't be invoked directly from the browser.
+// can't be invoked directly from the browser. The row must already be
+// claimed (status "processing"); every write below checks that it still is,
+// so a cancel mid-analysis throws the result away instead of saving it.
 export async function processScreenshot(
   supabase: SupabaseClient,
   params: {
@@ -14,15 +34,6 @@ export async function processScreenshot(
   },
 ) {
   const { screenshotId, userId, image, mediaType } = params;
-
-  await supabase
-    .from("screenshots")
-    .update({
-      status: "processing",
-      processing_error: null,
-      processing_started_at: new Date().toISOString(),
-    })
-    .eq("id", screenshotId);
 
   try {
     // Fetched per image so a category added mid-run is used right away.
@@ -50,19 +61,25 @@ export async function processScreenshot(
       status: "done",
       processing_error: null,
     };
-    let { error: updateError } = await supabase
+    let { data: saved, error: updateError } = await supabase
       .from("screenshots")
       .update({ ...result, metadata: analysis.metadata })
-      .eq("id", screenshotId);
+      .eq("id", screenshotId)
+      .eq("status", "processing")
+      .select("id");
     // PGRST204 = unknown column: migration 007 (metadata) not applied yet.
     // Save everything else rather than failing the whole analysis.
     if (updateError?.code === "PGRST204") {
-      ({ error: updateError } = await supabase
+      ({ data: saved, error: updateError } = await supabase
         .from("screenshots")
         .update(result)
-        .eq("id", screenshotId));
+        .eq("id", screenshotId)
+        .eq("status", "processing")
+        .select("id"));
     }
     if (updateError) throw updateError;
+    // Cancelled while the AI was reading it: leave it unsorted.
+    if (!saved?.length) return;
 
     await saveTags(supabase, screenshotId, userId, analysis.tags);
   } catch (err) {
@@ -71,7 +88,8 @@ export async function processScreenshot(
     await supabase
       .from("screenshots")
       .update({ status: "failed", processing_error: message.slice(0, 500) })
-      .eq("id", screenshotId);
+      .eq("id", screenshotId)
+      .eq("status", "processing");
   }
 }
 

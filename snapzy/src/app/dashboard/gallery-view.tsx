@@ -8,12 +8,12 @@ import {
   Spinner,
 } from "@/components/screenshot-card";
 import { ScreenshotModal } from "@/components/screenshot-modal";
-import { useT } from "@/components/preferences";
+import { recordSortRun, useT } from "@/components/preferences";
 import { Toaster } from "@/components/toast";
-import { colorStyles, type UserCategory } from "@/lib/categories";
-import { analyzeMultipleScreenshots, searchScreenshots } from "./actions";
+import { colorStyles, SORT_BATCH, type UserCategory } from "@/lib/categories";
+import { analyzeMultipleScreenshots, cancelSorting, searchScreenshots } from "./actions";
 import { ManageCategoriesDialog, openManageAlbums } from "./manage-categories";
-import { GalleryHero } from "./gallery-hero";
+import { GalleryHero, type SortRun } from "./gallery-hero";
 import { ProcessingPoller } from "./processing-poller";
 
 // "all" = every photo; "unsorted" = no category yet (still analyzing or
@@ -143,9 +143,23 @@ export function GalleryView({
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
-  // Size of the latest "Sort" run, for the banner's progress bar.
-  const [runTotal, setRunTotal] = useState<number | null>(null);
+  // The latest "Sort" run (size + start), for the banner's bar and ETA.
+  const [run, setRun] = useState<SortRun | null>(null);
   const [isAnalyzing, startAnalyze] = useTransition();
+  const [isCancelling, startCancel] = useTransition();
+  const processingCount = cards.filter(isProcessing).length;
+
+  // When a run finishes on its own, close it (during render, so a later
+  // single retry doesn't reuse its numbers) and remember how long it really
+  // took per photo so the next estimate is closer.
+  const [finishedRun, setFinishedRun] = useState<SortRun | null>(null);
+  if (run && !isAnalyzing && !isCancelling && processingCount === 0) {
+    setRun(null);
+    setFinishedRun(run);
+  }
+  useEffect(() => {
+    if (finishedRun) recordSortRun(finishedRun.total, Date.now() - finishedRun.startedAt);
+  }, [finishedRun]);
 
   const search = useSearch(query, cards.filter((c) => c.status === "done").length);
 
@@ -204,14 +218,15 @@ export function GalleryView({
       return next;
     });
 
-  function analyze(ids: string[], includeDone: boolean) {
+  function analyze(ids: string[], includeDone: boolean, limit?: number) {
     setNotice(null);
+    const startedAt = Date.now();
     startAnalyze(async () => {
       let queued = 0;
       for (let i = 0; i < ids.length; i += BULK_CHUNK) {
         const result = await analyzeMultipleScreenshots(
           ids.slice(i, i + BULK_CHUNK),
-          { includeDone },
+          { includeDone, limit },
         );
         if (!result.ok) {
           setNotice(result.error);
@@ -219,11 +234,20 @@ export function GalleryView({
         }
         queued += result.queued;
       }
-      if (queued > 0) setRunTotal(queued);
+      if (queued > 0) setRun({ total: queued, startedAt });
       setNotice(
         queued === 0 ? t("notice.nothing") : t("notice.analyzing", { count: queued }),
       );
       setSelectedIds(new Set());
+    });
+  }
+
+  function cancel() {
+    startCancel(async () => {
+      const result = await cancelSorting();
+      // Cleared first so the effect above doesn't record a cut-short run.
+      setRun(null);
+      setNotice(result.ok ? t("notice.cancelled", { count: result.cancelled }) : result.error);
     });
   }
 
@@ -295,9 +319,14 @@ export function GalleryView({
           firstName={firstName}
           toSort={cards.filter(needsAnalysis)}
           processing={cards.filter(isProcessing)}
-          runTotal={runTotal}
+          run={run}
           sorting={isAnalyzing}
-          onSort={() => analyze(cards.filter(needsAnalysis).map((c) => c.id), false)}
+          cancelling={isCancelling}
+          // Newest unsorted photos first, SORT_BATCH per press.
+          onSort={() =>
+            analyze(cards.filter(needsAnalysis).slice(0, SORT_BATCH).map((c) => c.id), false, SORT_BATCH)
+          }
+          onCancel={cancel}
           onOpenPhoto={showPhoto}
         />
       )}

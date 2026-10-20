@@ -96,6 +96,10 @@ export const NOT_ANALYZED_YET = "Not analyzed yet.";
 export const SECONDS_PER_PHOTO = 7;
 export const BULK_CONCURRENCY = 3;
 
+// "Sort photos" takes at most this many unsorted photos per press, so one
+// click stays quick and inside the free Gemini quota.
+export const SORT_BATCH = 10;
+
 // A healthy analysis takes seconds, but bulk runs queue several at once.
 // After this long in pending/processing we assume the job died and offer a retry.
 export const STUCK_AFTER_MS = 10 * 60 * 1000;

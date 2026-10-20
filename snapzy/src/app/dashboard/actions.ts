@@ -8,7 +8,7 @@ import { after } from "next/server";
 import { BULK_CONCURRENCY, NOT_ANALYZED_YET, STUCK_AFTER_MS } from "@/lib/categories";
 import { createClient } from "@/lib/supabase/server";
 import { isAllowedImageType, MAX_UPLOAD_BYTES } from "@/lib/uploads";
-import { processScreenshot } from "./process-screenshot";
+import { claimScreenshot, processScreenshot } from "./process-screenshot";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 export type BulkAnalyzeResult =
@@ -130,10 +130,11 @@ function needsAnalysis(row: QueueRow, now: number) {
  * Runs AI analysis for several screenshots in the background.
  * By default only failed, stuck or uncategorized items are queued;
  * pass `includeDone` to re-analyze everything (e.g. "Re-analyze all").
+ * `limit` caps how many are queued (newest first), e.g. SORT_BATCH.
  */
 export async function analyzeMultipleScreenshots(
   ids: string[],
-  options: { includeDone?: boolean } = {},
+  options: { includeDone?: boolean; limit?: number } = {},
 ): Promise<BulkAnalyzeResult> {
   const uniqueIds = [...new Set(ids)].filter((id) => typeof id === "string");
   if (uniqueIds.length === 0) return { ok: true, queued: 0, skipped: 0 };
@@ -156,15 +157,17 @@ export async function analyzeMultipleScreenshots(
   const { data: rows, error } = await supabase
     .from("screenshots")
     .select("id, storage_path, mime_type, status, category_id, processing_started_at")
-    .in("id", uniqueIds);
+    .in("id", uniqueIds)
+    .order("created_at", { ascending: false });
   if (error) {
     return { ok: false, error: error.message };
   }
 
   const now = Date.now();
-  const toQueue = (rows as QueueRow[]).filter(
-    (r) => options.includeDone || needsAnalysis(r, now),
-  );
+  const limit = options.limit && options.limit > 0 ? Math.floor(options.limit) : undefined;
+  const toQueue = (rows as QueueRow[])
+    .filter((r) => options.includeDone || needsAnalysis(r, now))
+    .slice(0, limit);
   if (toQueue.length === 0) {
     return { ok: true, queued: 0, skipped: uniqueIds.length };
   }
@@ -203,6 +206,8 @@ async function runQueue(
   const queue = [...rows];
   const worker = async () => {
     for (let row = queue.shift(); row; row = queue.shift()) {
+      // Skips rows the user cancelled while they waited in the queue.
+      if (!(await claimScreenshot(supabase, row.id))) continue;
       const { data: blob, error } = await supabase.storage
         .from(BUCKET)
         .download(row.storage_path);
@@ -213,7 +218,8 @@ async function runQueue(
             status: "failed",
             processing_error: error?.message ?? "Could not download the image.",
           })
-          .eq("id", row.id);
+          .eq("id", row.id)
+          .eq("status", "processing");
         continue;
       }
       await processScreenshot(supabase, {
@@ -227,6 +233,43 @@ async function runQueue(
   await Promise.all(
     Array.from({ length: Math.min(BULK_CONCURRENCY, rows.length) }, worker),
   );
+}
+
+/**
+ * Stops the current sort: every queued or in-progress photo goes back to
+ * "new" (unsorted). Background workers check the status before and after
+ * each AI call, so they skip these rows and discard any late result.
+ */
+export async function cancelSorting(): Promise<
+  { ok: true; cancelled: number } | { ok: false; error: string }
+> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return { ok: false, error: "You are not logged in." };
+  }
+
+  const reset = (fields: Record<string, string | null>) =>
+    supabase
+      .from("screenshots")
+      .update({ ...fields, processing_started_at: null })
+      .eq("user_id", user.id)
+      .in("status", ["pending", "processing"])
+      .select("id");
+
+  let { data, error } = await reset({ status: "new", processing_error: null });
+  // 23514 = check violation: migration 008 (status 'new') not applied yet.
+  if (error?.code === "23514") {
+    ({ data, error } = await reset({ status: "failed", processing_error: NOT_ANALYZED_YET }));
+  }
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath("/dashboard");
+  return { ok: true, cancelled: data?.length ?? 0 };
 }
 
 export type SearchResult =
