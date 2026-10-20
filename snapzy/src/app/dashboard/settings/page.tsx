@@ -15,7 +15,7 @@ export default function SettingsPage() {
     <div className="paper-grain relative flex flex-1 flex-col">
       <WatercolorBackdrop />
       <SettingsHeader />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-6 pb-16 sm:px-6">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 pt-22 pb-16 sm:px-6">
         <Suspense fallback={<SettingsSkeleton />}>
           <AccountSettings />
         </Suspense>

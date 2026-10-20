@@ -24,7 +24,7 @@ const CARD = "rounded-4xl bg-card/90 p-6 shadow-soft ring-1 ring-line backdrop-b
 export function SettingsHeader() {
   const t = useT();
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line/70 bg-card/75 px-4 backdrop-blur-xl sm:px-6">
+    <header className="fixed inset-x-0 top-0 z-30 flex h-16 items-center gap-3 border-b border-line/70 bg-card/75 px-4 backdrop-blur-xl sm:px-6">
       <Link
         href="/dashboard"
         aria-label={t("settings.back")}

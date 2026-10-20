@@ -37,7 +37,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
       </head>
-      <body className="flex min-h-full flex-col bg-paper font-sans text-ink">
+      {/* overflow-x-clip: a stray wide element can't widen the page on phones
+          (which would push fixed bars off screen). Unlike overflow-hidden it
+          doesn't break position: sticky. */}
+      <body className="flex min-h-full flex-col overflow-x-clip bg-paper font-sans text-ink">
         <ThemeSync />
         {children}
       </body>

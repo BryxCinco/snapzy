@@ -25,8 +25,9 @@ export default function DashboardPage() {
     <div className="paper-grain relative flex flex-1 flex-col">
       <WatercolorBackdrop />
 
-      {/* Fixed h-16 so the sticky album bar can sit right under it (top-16). */}
-      <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line/70 bg-card/75 px-4 backdrop-blur-xl sm:gap-6 sm:px-6">
+      {/* Fixed (not sticky) so it never scrolls away on phones and tablets;
+          <main> is padded by its h-16. */}
+      <header className="fixed inset-x-0 top-0 z-30 flex h-16 items-center gap-3 border-b border-line/70 bg-card/75 px-4 backdrop-blur-xl sm:gap-6 sm:px-6">
         <div className="shrink-0">
           <Logo href="/dashboard" />
         </div>
@@ -44,7 +45,7 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-4 pb-32 sm:px-6 sm:pt-6 sm:pb-16">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 pt-20 pb-32 sm:px-6 sm:pt-22 lg:pb-16">
         <div>
           <Suspense fallback={<GallerySkeleton />}>
             <Gallery />

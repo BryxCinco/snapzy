@@ -3,12 +3,12 @@ import { Suspense } from "react";
 import { AccountDeletedNotice } from "@/components/account-deleted-notice";
 import { Brushstroke, Logo, WatercolorBackdrop } from "@/components/watercolor";
 
-// Sample "screenshots" (illustrations in /public/landing). Each floats on its
-// own slow rhythm so the pile never moves in lockstep.
+// Sample photos (in /public/landing). Each floats on its own slow rhythm so
+// the pile never moves in lockstep.
 const prints = [
-  { src: "/landing/wifi.svg", alt: "A WiFi network card", caption: "wifi pw ✓", tilt: "-rotate-6", pos: "left-0 top-10", float: { duration: "7s", delay: "0s" } },
-  { src: "/landing/receipt.svg", alt: "A payment receipt", caption: "gcash receipt", tilt: "rotate-3", pos: "left-24 top-0", float: { duration: "8.5s", delay: "-3s" } },
-  { src: "/landing/beach.svg", alt: "A beach photo", caption: "beach day ☀", tilt: "-rotate-2", pos: "left-12 top-36", float: { duration: "6.5s", delay: "-1.5s" } },
+  { src: "/landing/paris.webp", alt: "The Eiffel Tower at sunset", caption: "paris sunset", tilt: "-rotate-6", pos: "left-0 top-10", fit: "object-[50%_30%]", float: { duration: "7s", delay: "0s" } },
+  { src: "/landing/gcash-qr.webp", alt: "A GCash scan-to-pay QR sign", caption: "gcash qr ✓", tilt: "rotate-3", pos: "left-24 top-0", fit: "object-top", float: { duration: "8.5s", delay: "-3s" } },
+  { src: "/landing/sunflowers.webp", alt: "Sunflowers against a blue sky", caption: "sunflowers ✿", tilt: "-rotate-2", pos: "left-12 top-36", fit: "object-center", float: { duration: "6.5s", delay: "-1.5s" } },
 ];
 
 const features = [
@@ -94,7 +94,7 @@ export default function Home() {
               }`}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.src} alt={p.alt} className="aspect-4/5 w-full rounded-sm object-cover" />
+              <img src={p.src} alt={p.alt} className={`aspect-4/5 w-full rounded-sm object-cover ${p.fit}`} />
               <figcaption className="absolute right-0 bottom-1.5 left-0 text-center font-hand text-xl text-ink/70">
                 {p.caption}
               </figcaption>

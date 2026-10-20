@@ -19,13 +19,13 @@ function emit(name: string) {
 const ITEM =
   "relative flex flex-col items-center gap-0.5 px-3 py-1 text-[10px] font-medium transition";
 
-// Bottom tab bar on phones, like the reference's home / search / … bar.
+// Bottom tab bar on phones and tablets, like the reference's home / search / … bar.
 export function MobileNav() {
   const t = useT();
   return (
     <nav
       aria-label="Quick actions"
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line/80 bg-card/90 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl sm:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line/80 bg-card/90 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden"
     >
       <div className="mx-auto flex max-w-md items-end justify-between">
         <Suspense fallback={<HomeItem active />}>
