@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" font-family="Poppins, Arial, sans-serif">
+  <rect width="400" height="500" fill="#eef4fb"/>
+  <rect width="400" height="150" fill="#2f7fcf"/>
+  <circle cx="200" cy="58" r="26" fill="#fff"/>
+  <path d="M188 58 l8 8 l16 -18" stroke="#2f7fcf" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="200" y="112" text-anchor="middle" fill="#fff" font-size="20" font-weight="600">Payment sent</text>
+  <text x="200" y="136" text-anchor="middle" fill="#cfe4fa" font-size="13">Oct 20, 2026 · 7:42 PM</text>
+  <rect x="34" y="120" width="332" height="340" rx="22" fill="#fff"/>
+  <text x="200" y="184" text-anchor="middle" fill="#8a93a3" font-size="13">Amount</text>
+  <text x="200" y="226" text-anchor="middle" fill="#1d2433" font-size="38" font-weight="700">₱1,250.00</text>
+  <line x1="62" y1="256" x2="338" y2="256" stroke="#e1e6ee" stroke-width="2" stroke-dasharray="6 6"/>
+  <g font-size="14">
+    <text x="62" y="292" fill="#8a93a3">To</text>
+    <text x="338" y="292" text-anchor="end" fill="#1d2433" font-weight="600">Juan's Coffee</text>
+    <text x="62" y="326" fill="#8a93a3">Ref no.</text>
+    <text x="338" y="326" text-anchor="end" fill="#1d2433" font-weight="600">8021 447 9031</text>
+    <text x="62" y="360" fill="#8a93a3">Fee</text>
+    <text x="338" y="360" text-anchor="end" fill="#1d2433" font-weight="600">Free</text>
+  </g>
+  <rect x="62" y="392" width="276" height="44" rx="22" fill="#eaf4fc"/>
+  <text x="200" y="420" text-anchor="middle" fill="#2f7fcf" font-size="14" font-weight="600">Share receipt</text>
+</svg>

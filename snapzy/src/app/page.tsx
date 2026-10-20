@@ -1,10 +1,14 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import { AccountDeletedNotice } from "@/components/account-deleted-notice";
 import { Brushstroke, Logo, WatercolorBackdrop } from "@/components/watercolor";
 
+// Sample "screenshots" (illustrations in /public/landing). Each floats on its
+// own slow rhythm so the pile never moves in lockstep.
 const prints = [
-  { tone: "from-brand/70 via-lilac/60 to-blush/70", caption: "wifi pw ✓", tilt: "-rotate-6", pos: "left-0 top-10" },
-  { tone: "from-blush via-[#f7dfc8] to-brand/50", caption: "gcash receipt", tilt: "rotate-3", pos: "left-24 top-0" },
-  { tone: "from-lilac via-brand/50 to-[#bfe3d6]", caption: "flight PR 102", tilt: "-rotate-2", pos: "left-12 top-36" },
+  { src: "/landing/wifi.svg", alt: "A WiFi network card", caption: "wifi pw ✓", tilt: "-rotate-6", pos: "left-0 top-10", float: { duration: "7s", delay: "0s" } },
+  { src: "/landing/receipt.svg", alt: "A payment receipt", caption: "gcash receipt", tilt: "rotate-3", pos: "left-24 top-0", float: { duration: "8.5s", delay: "-3s" } },
+  { src: "/landing/beach.svg", alt: "A beach photo", caption: "beach day ☀", tilt: "-rotate-2", pos: "left-12 top-36", float: { duration: "6.5s", delay: "-1.5s" } },
 ];
 
 const features = [
@@ -39,6 +43,10 @@ export default function Home() {
           Log in
         </Link>
       </header>
+      {/* useSearchParams needs a Suspense boundary; the page stays static. */}
+      <Suspense fallback={null}>
+        <AccountDeletedNotice />
+      </Suspense>
 
       <main className="mx-auto grid w-full max-w-6xl flex-1 items-center gap-14 px-5 pt-6 pb-20 sm:px-8 lg:grid-cols-[1.1fr_1fr] lg:pt-12">
         <section>
@@ -76,7 +84,8 @@ export default function Home() {
           {prints.map((p, i) => (
             <figure
               key={p.caption}
-              className={`absolute ${p.pos} ${p.tilt} w-48 rounded-md bg-card p-2.5 pb-9 shadow-lift transition duration-500 ease-out sm:w-56 ${
+              style={{ animationDuration: p.float.duration, animationDelay: p.float.delay }}
+              className={`animate-float absolute ${p.pos} ${p.tilt} w-48 rounded-md bg-card p-2.5 pb-9 shadow-lift transition-[rotate,translate] duration-500 ease-out sm:w-56 ${
                 i === 0
                   ? "group-hover:-translate-x-6 group-hover:-rotate-12"
                   : i === 1
@@ -84,7 +93,8 @@ export default function Home() {
                     : "group-hover:translate-y-6 group-hover:rotate-1"
               }`}
             >
-              <div className={`aspect-4/5 rounded-sm bg-linear-to-br ${p.tone}`} />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={p.src} alt={p.alt} className="aspect-4/5 w-full rounded-sm object-cover" />
               <figcaption className="absolute right-0 bottom-1.5 left-0 text-center font-hand text-xl text-ink/70">
                 {p.caption}
               </figcaption>

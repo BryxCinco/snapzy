@@ -1,6 +1,8 @@
 "use server";
 
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import {
   fallbackCategory,
   getUserCategories,
@@ -21,6 +23,71 @@ async function requireUser() {
     data: { user },
   } = await supabase.auth.getUser();
   return { supabase, user };
+}
+
+// Checks a password without touching the user's session cookies: a
+// throwaway client that keeps nothing.
+async function passwordMatches(email: string, password: string) {
+  const verifier = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } },
+  );
+  const { error } = await verifier.auth.signInWithPassword({ email, password });
+  return !error;
+}
+
+/**
+ * Permanently deletes the account after re-checking the password:
+ * 1. removes every file under the user's Storage folder,
+ * 2. calls delete_my_account() (migration 009), which deletes the auth user;
+ *    their rows cascade away,
+ * 3. clears the session cookies and sends them to the landing page.
+ */
+export async function deleteAccount(password: string): Promise<SettingsResult> {
+  const { supabase, user } = await requireUser();
+  if (!user?.email) return { ok: false, error: "You are not logged in." };
+  if (!password) return { ok: false, error: "Enter your password." };
+  if (!(await passwordMatches(user.email, String(password)))) {
+    return { ok: false, error: "That password isn't right." };
+  }
+
+  // List the folder rather than trusting DB rows, so stray files go too.
+  // Each round re-lists from the start (removed files drop out); the cap
+  // stops a loop if removal ever silently fails.
+  const PAGE = 1000;
+  for (let round = 0; round < 50; round++) {
+    const { data: files, error } = await supabase.storage
+      .from(BUCKET)
+      .list(user.id, { limit: PAGE });
+    if (error) return { ok: false, error: error.message };
+    if (!files || files.length === 0) break;
+    const paths = files.map((f) => `${user.id}/${f.name}`);
+    for (let i = 0; i < paths.length; i += REMOVE_BATCH) {
+      const { error: removeError } = await supabase.storage
+        .from(BUCKET)
+        .remove(paths.slice(i, i + REMOVE_BATCH));
+      if (removeError) return { ok: false, error: removeError.message };
+    }
+    if (files.length < PAGE) break;
+  }
+
+  const { error: deleteError } = await supabase.rpc("delete_my_account");
+  if (deleteError) {
+    // PGRST202 = function not found.
+    return {
+      ok: false,
+      error:
+        deleteError.code === "PGRST202"
+          ? "Account deletion isn't set up yet. Run supabase/migrations/009_delete_account.sql."
+          : deleteError.message,
+    };
+  }
+
+  // The user no longer exists; drop the now-useless session cookies.
+  await supabase.auth.signOut({ scope: "local" });
+  revalidatePath("/", "layout");
+  redirect("/?account=deleted");
 }
 
 export async function updatePassword(newPassword: string): Promise<SettingsResult> {

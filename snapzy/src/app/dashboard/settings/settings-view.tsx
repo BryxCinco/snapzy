@@ -7,7 +7,7 @@ import { Spinner } from "@/components/screenshot-card";
 import { toast, Toaster } from "@/components/toast";
 import { Logo } from "@/components/watercolor";
 import { LANGUAGES, type MessageKey } from "@/lib/i18n";
-import { deleteAllPhotos, resetCategories, updatePassword } from "./actions";
+import { deleteAccount, deleteAllPhotos, resetCategories, updatePassword } from "./actions";
 
 const APP_VERSION = "0.1.0";
 
@@ -152,6 +152,7 @@ export function SettingsView({
               done={t("settings.reset")}
               run={resetCategories}
             />
+            <DeleteAccount email={email} />
           </div>
         </section>
       </div>
@@ -383,6 +384,85 @@ function DangerAction({
         >
           {title}
         </button>
+      )}
+    </div>
+  );
+}
+
+// Asks for the password, then a final confirm, before deleting everything.
+function DeleteAccount({ email }: { email: string }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <div className="rounded-3xl bg-red-50/60 p-5 ring-1 ring-red-200 md:col-span-2 dark:bg-red-500/5 dark:ring-red-500/30">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-red-600">{t("settings.deleteAccount")}</p>
+          <p className="mt-0.5 max-w-xl text-sm text-mute">{t("settings.deleteAccountHint")}</p>
+        </div>
+        {!open && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="rounded-full bg-red-500 px-4 py-2 text-sm font-semibold text-white shadow-soft transition hover:bg-red-600"
+          >
+            {t("settings.deleteAccount")}
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!window.confirm(t("settings.deleteAccountConfirm", { email }))) return;
+            setError(null);
+            startTransition(async () => {
+              // On success the action redirects away, so only errors return.
+              const result = await deleteAccount(password);
+              if (!result.ok) setError(result.error);
+            });
+          }}
+          className="mt-4 flex flex-wrap items-center gap-2"
+        >
+          {/* Hidden username field helps password managers fill the right entry. */}
+          <input type="email" value={email} readOnly hidden autoComplete="username" />
+          <input
+            type="password"
+            autoComplete="current-password"
+            autoFocus
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder={t("settings.passwordToDelete")}
+            aria-label={t("settings.passwordToDelete")}
+            className="h-10 min-w-0 flex-1 rounded-full bg-card px-5 text-sm text-ink ring-1 ring-red-200 outline-none placeholder:text-mute/70 focus:ring-2 focus:ring-red-400 sm:max-w-sm dark:ring-red-500/30"
+          />
+          <button
+            type="submit"
+            disabled={pending || !password}
+            className="flex h-10 items-center gap-1.5 rounded-full bg-red-500 px-4 text-sm font-semibold text-white transition hover:bg-red-600 disabled:opacity-40"
+          >
+            {pending && <Spinner />}
+            {t("settings.deleteForever")}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              setPassword("");
+              setError(null);
+            }}
+            className="h-10 rounded-full px-3 text-sm font-medium text-mute hover:text-ink"
+          >
+            {t("settings.cancel")}
+          </button>
+          {error && <p className="w-full text-sm text-red-600">{error}</p>}
+        </form>
       )}
     </div>
   );
