@@ -10,9 +10,15 @@ import {
 import { ScreenshotModal } from "@/components/screenshot-modal";
 import { confirmDialog } from "@/components/confirm-dialog";
 import { recordSortRun, useT } from "@/components/preferences";
-import { Toaster } from "@/components/toast";
+import { toast, Toaster } from "@/components/toast";
 import { colorStyles, SORT_BATCH, type UserCategory } from "@/lib/categories";
-import { analyzeMultipleScreenshots, cancelSorting, searchScreenshots } from "./actions";
+import {
+  analyzeMultipleScreenshots,
+  cancelSorting,
+  loadMoreScreenshots,
+  loadScreenshotsByIds,
+  searchScreenshots,
+} from "./actions";
 import { ManageCategoriesDialog, openManageAlbums } from "./manage-categories";
 import { GalleryHero, type SortRun } from "./gallery-hero";
 import { ProcessingPoller } from "./processing-poller";
@@ -25,7 +31,10 @@ type Album = {
   key: AlbumKey;
   label: string;
   dot: string;
+  // Loaded photos only; the gallery pages in older ones on demand.
   cards: ScreenshotCardData[];
+  // Photos in the whole album, loaded or not.
+  count: number;
 };
 
 // Must match MAX_BULK_IDS in actions.ts.
@@ -42,10 +51,21 @@ function needsAnalysis(c: ScreenshotCardData) {
   return c.categoryId === null;
 }
 
+type LibraryCounts = { total: number; byAlbum: Record<string, number> | null };
+
+// Library-wide size of an album. Falls back to what is loaded when the server
+// counts are unavailable (migration 010 pending) or while searching.
+function albumCount(key: AlbumKey, loaded: number, counts: LibraryCounts | null) {
+  if (!counts) return loaded;
+  const server = key === "all" ? counts.total : counts.byAlbum?.[key];
+  return Math.max(server ?? loaded, loaded);
+}
+
 function buildAlbums(
   cards: ScreenshotCardData[],
   categories: UserCategory[],
   labels: { all: string; unsorted: string },
+  counts: LibraryCounts | null,
 ): Album[] {
   const known = new Set(categories.map((c) => c.id));
   const byKey = new Map<AlbumKey, ScreenshotCardData[]>();
@@ -60,17 +80,29 @@ function buildAlbums(
       label: labels.all,
       dot: "bg-linear-to-br from-brand to-blush",
       cards,
+      count: albumCount("all", cards.length, counts),
     },
-    ...categories.map((c) => ({
-      key: c.id,
-      label: c.name,
-      dot: colorStyles[c.color].dot,
-      cards: byKey.get(c.id) ?? [],
-    })),
+    ...categories.map((c) => {
+      const list = byKey.get(c.id) ?? [];
+      return {
+        key: c.id,
+        label: c.name,
+        dot: colorStyles[c.color].dot,
+        cards: list,
+        count: albumCount(c.id, list.length, counts),
+      };
+    }),
   ];
-  const unsorted = byKey.get("unsorted");
-  if (unsorted) {
-    albums.push({ key: "unsorted", label: labels.unsorted, dot: "bg-mute", cards: unsorted });
+  const unsorted = byKey.get("unsorted") ?? [];
+  const unsortedCount = albumCount("unsorted", unsorted.length, counts);
+  if (unsortedCount > 0) {
+    albums.push({
+      key: "unsorted",
+      label: labels.unsorted,
+      dot: "bg-mute",
+      cards: unsorted,
+      count: unsortedCount,
+    });
   }
   return albums;
 }
@@ -127,12 +159,46 @@ function useSearch(query: string, doneCount: number) {
   return { ...state, loading };
 }
 
+const byNewest = (a: ScreenshotCardData, b: ScreenshotCardData) =>
+  Date.parse(b.createdAt) - Date.parse(a.createdAt);
+
+function oldestCreatedAt(list: ScreenshotCardData[]) {
+  return list.reduce<string | null>(
+    (oldest, c) => (oldest === null || Date.parse(c.createdAt) < Date.parse(oldest) ? c.createdAt : oldest),
+    null,
+  );
+}
+
+// Adds `incoming` to `list`, replacing photos that are already there.
+function mergeById(list: ScreenshotCardData[], incoming: ScreenshotCardData[]) {
+  const fresh = new Map(incoming.map((c) => [c.id, c]));
+  const have = new Set(list.map((c) => c.id));
+  return [...list.map((c) => fresh.get(c.id) ?? c), ...incoming.filter((c) => !have.has(c.id))];
+}
+
+// loadScreenshotsByIds answers at most this many ids per call.
+const FETCH_CHUNK = 200;
+
+async function fetchByIds(ids: string[]) {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += FETCH_CHUNK) chunks.push(ids.slice(i, i + FETCH_CHUNK));
+  const results = await Promise.all(chunks.map((chunk) => loadScreenshotsByIds(chunk)));
+  return results.every((r) => r.ok) ? results.flatMap((r) => (r.ok ? r.cards : [])) : null;
+}
+
 export function GalleryView({
-  cards,
+  cards: initialCards,
+  total,
+  albumCounts,
   categories,
   firstName,
 }: {
+  // The newest page, straight from the server (it refreshes while photos are analyzing).
   cards: ScreenshotCardData[];
+  // Photos in the whole library.
+  total: number;
+  // Photos per album over the whole library; null until migration 010 is run.
+  albumCounts: Record<string, number> | null;
   categories: UserCategory[];
   firstName: string;
 }) {
@@ -141,6 +207,66 @@ export function GalleryView({
   const openKey = searchParams.get("album");
   const query = (searchParams.get("q") ?? "").trim();
   const searching = query !== "";
+
+  // The server sends only the newest page; older photos are loaded here on
+  // demand. `extra` holds them, and `pulledIds` marks the ones fetched by id
+  // (search hits, an opened photo) instead of by scrolling, so they don't
+  // move the paging cursor.
+  const [extra, setExtra] = useState<ScreenshotCardData[]>([]);
+  const [pulledIds, setPulledIds] = useState<Set<string>>(new Set());
+  const [allCursor, setAllCursor] = useState<string | null>(null);
+  const [exhausted, setExhausted] = useState<Set<string>>(new Set());
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const loadingRef = useRef(false);
+  const extraRef = useRef(extra);
+  const prevInitial = useRef(initialCards);
+  const requested = useRef(new Set<string>());
+
+  const initialIds = new Set(initialCards.map((c) => c.id));
+  const cards =
+    extra.length === 0
+      ? initialCards
+      : [...initialCards, ...extra.filter((c) => !initialIds.has(c.id))].sort(byNewest);
+
+  useEffect(() => {
+    extraRef.current = extra;
+  });
+
+  // Every server refresh (polling, uploads, deletes) replaces the first page.
+  // Keep what slid out of it, and re-read the loaded older photos so their
+  // status stays current and deleted ones disappear.
+  useEffect(() => {
+    const previous = prevInitial.current;
+    prevInitial.current = initialCards;
+    if (previous === initialCards) return;
+    const now = new Set(initialCards.map((c) => c.id));
+    const known = new Map(extraRef.current.map((c) => [c.id, c]));
+    for (const c of previous) if (!now.has(c.id)) known.set(c.id, c);
+    if (known.size === 0) return;
+    let cancelled = false;
+    fetchByIds([...known.keys()]).then((fresh) => {
+      if (!cancelled && fresh) setExtra(fresh);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialCards]);
+
+  // Back from the phone's Share sheet: /share-target redirects here with a
+  // summary (?shared=N&skipped=M). Say it once, then tidy the URL.
+  const sharedParam = searchParams.get("shared");
+  useEffect(() => {
+    if (sharedParam === null) return;
+    const params = new URLSearchParams(window.location.search);
+    const skipped = Number(params.get("skipped") ?? 0);
+    if (Number(sharedParam) > 0) toast(t("share.saved", { count: Number(sharedParam) }));
+    if (skipped > 0) toast(t("share.skipped", { count: skipped }));
+    params.delete("shared");
+    params.delete("skipped");
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [sharedParam, t]);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [notice, setNotice] = useState<string | null>(null);
@@ -174,16 +300,78 @@ export function GalleryView({
       })
     : cards;
 
-  const albums = buildAlbums(matched, categories, {
-    all: t("albums.allPhotos"),
-    unsorted: t("albums.unsorted"),
-  });
+  const libraryTotal = Math.max(total, cards.length);
+  const albums = buildAlbums(
+    matched,
+    categories,
+    { all: t("albums.allPhotos"), unsorted: t("albums.unsorted") },
+    // Library-wide counts don't apply to a search, which lists only its hits.
+    searching ? null : { total: libraryTotal, byAlbum: albumCounts },
+  );
   const openAlbum = openKey ? albums.find((a) => a.key === openKey) : undefined;
 
   // Photo counts per category over the whole library (for the manage dialog).
   const counts = new Map<string, number>();
   for (const c of cards) {
     if (c.categoryId) counts.set(c.categoryId, (counts.get(c.categoryId) ?? 0) + 1);
+  }
+  if (albumCounts) {
+    for (const [key, n] of Object.entries(albumCounts)) {
+      if (key !== "unsorted") counts.set(key, Math.max(n, counts.get(key) ?? 0));
+    }
+  }
+
+  // Search hits and an opened photo can be older than the pages loaded so far.
+  const photoParam = searchParams.get("photo");
+  const missingIds = [...(searching ? search.ids : []), ...(photoParam ? [photoParam] : [])]
+    .filter((id) => !byId.has(id))
+    .slice(0, FETCH_CHUNK);
+  const missingKey = missingIds.join(",");
+  useEffect(() => {
+    const fresh = (missingKey ? missingKey.split(",") : []).filter((id) => !requested.current.has(id));
+    if (fresh.length === 0) return;
+    fresh.forEach((id) => requested.current.add(id));
+    loadScreenshotsByIds(fresh).then((result) => {
+      if (!result.ok || result.cards.length === 0) return;
+      setExtra((prev) => mergeById(prev, result.cards));
+      setPulledIds((prev) => new Set([...prev, ...result.cards.map((c) => c.id)]));
+    });
+  }, [missingKey]);
+
+  // Where the next page of an album starts: just older than the oldest photo
+  // of it that arrived by paging. "all" tracks its own cursor because pages
+  // loaded for one album also hold photos of others.
+  function cursorFor(key: AlbumKey) {
+    if (key === "all") return allCursor ?? oldestCreatedAt(initialCards);
+    const prefix = cards.filter(
+      (c) => !pulledIds.has(c.id) && (key === "unsorted" ? c.categoryId === null : c.categoryId === key),
+    );
+    return oldestCreatedAt(prefix);
+  }
+
+  function loadMore(key: AlbumKey) {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setLoadingMore(true);
+    setLoadError(null);
+    loadMoreScreenshots(key, cursorFor(key))
+      .then((result) => {
+        if (!result.ok) {
+          setLoadError(result.error);
+          return;
+        }
+        // Nothing older: stop offering "Load more" even if the count is off.
+        if (result.cards.length === 0) setExhausted((prev) => new Set(prev).add(key));
+        else {
+          setExtra((prev) => mergeById(prev, result.cards));
+          if (key === "all") setAllCursor(oldestCreatedAt(result.cards));
+        }
+      })
+      .catch(() => setLoadError(t("gallery.loadError")))
+      .finally(() => {
+        loadingRef.current = false;
+        setLoadingMore(false);
+      });
   }
 
   // Drop ids of cards that no longer exist (e.g. deleted).
@@ -317,7 +505,7 @@ export function GalleryView({
       {/* Home only: inside an album or a search the photos come first. */}
       {!searching && !openAlbum && (
         <GalleryHero
-          cards={cards}
+          photoCount={libraryTotal}
           albumCount={categories.length}
           firstName={firstName}
           toSort={cards.filter(needsAnalysis)}
@@ -377,6 +565,10 @@ export function GalleryView({
           {...cardProps}
           album={openAlbum}
           isAnalyzing={isAnalyzing}
+          hasMore={openAlbum.count > openAlbum.cards.length && !exhausted.has(openAlbum.key)}
+          loadingMore={loadingMore}
+          loadError={loadError}
+          onLoadMore={() => loadMore(openAlbum.key)}
           onBack={() => openAlbumKey(null)}
           onSelectAll={selectMany}
           onReanalyze={() => reanalyze(openAlbum.cards, openAlbum.label)}
@@ -496,8 +688,8 @@ function AlbumGrid({
   const t = useT();
   // Albums with photos first; empty categories at the end so new custom
   // ones are still visible.
-  const filled = albums.filter((a) => a.cards.length > 0);
-  const empty = albums.filter((a) => a.cards.length === 0);
+  const filled = albums.filter((a) => a.count > 0);
+  const empty = albums.filter((a) => a.count === 0);
   const all = albums.find((a) => a.key === "all");
   const albumCount = filled.length - 1;
 
@@ -523,7 +715,7 @@ function AlbumGrid({
           </svg>
           {t("albums.manageAlbums")}
         </button>
-        {all && <DownloadZipLink albumKey="all" count={all.cards.length} />}
+        {all && <DownloadZipLink albumKey="all" count={all.count} />}
         <button type="button" onClick={onReanalyzeAll} disabled={isAnalyzing} className={PILL_GHOST}>
           {isAnalyzing && <Spinner />}
           {t("action.reanalyzeAll")}
@@ -553,7 +745,7 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
   // Last one drawn ends up on top, so the newest photo is the cover.
   const covers = album.cards.slice(0, 3).reverse();
   const analyzing = album.cards.filter(isProcessing).length;
-  const isEmpty = album.cards.length === 0;
+  const isEmpty = album.count === 0;
 
   return (
     <button
@@ -563,12 +755,12 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
       className="group block w-full text-left outline-none disabled:cursor-default"
     >
       <div className="relative aspect-square">
-        {isEmpty ? (
+        {covers.length === 0 ? (
           <div
             className="sketch-border grid h-full place-items-center rounded-3xl bg-card/50 px-4 text-center"
             style={{ ["--c" as string]: "var(--color-line)" }}
           >
-            <p className="font-hand text-xl text-mute">{t("albums.empty")}</p>
+            <p className="font-hand text-xl text-mute">{isEmpty ? t("albums.empty") : "✿"}</p>
           </div>
         ) : (
           covers.map((c, i) => {
@@ -580,7 +772,7 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={c.url}
+                  src={c.thumbUrl}
                   alt=""
                   loading="lazy"
                   decoding="async"
@@ -590,9 +782,9 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
             );
           })
         )}
-        {album.cards.length > 3 && (
+        {album.count > 3 && (
           <span className="absolute right-1 bottom-1 rounded-full bg-card px-2.5 py-1 text-xs font-semibold text-brand-deep shadow-soft ring-1 ring-line">
-            +{album.cards.length - 3}
+            +{album.count - 3}
           </span>
         )}
         {analyzing > 0 && (
@@ -613,9 +805,9 @@ function AlbumCard({ album, onOpen }: { album: Album; onOpen: () => void }) {
         </p>
       </div>
       <p className="mt-0.5 px-1 text-xs text-mute">
-        {album.cards.length === 1
+        {album.count === 1
           ? t("albums.photosOne")
-          : t("albums.photos", { count: album.cards.length })}
+          : t("albums.photos", { count: album.count })}
       </p>
     </button>
   );
@@ -663,6 +855,10 @@ function CardGrid({
 function AlbumDetail({
   album,
   isAnalyzing,
+  hasMore,
+  loadingMore,
+  loadError,
+  onLoadMore,
   onBack,
   onSelectAll,
   onReanalyze,
@@ -670,6 +866,10 @@ function AlbumDetail({
 }: CardListProps & {
   album: Album;
   isAnalyzing: boolean;
+  hasMore: boolean;
+  loadingMore: boolean;
+  loadError: string | null;
+  onLoadMore: () => void;
   onBack: () => void;
   onSelectAll: (ids: string[], select: boolean) => void;
   onReanalyze: () => void;
@@ -699,7 +899,7 @@ function AlbumDetail({
             <h2 className="mt-1 flex items-center gap-2 text-xl font-semibold tracking-tight text-ink sm:text-2xl">
               <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full ${album.dot}`} />
               <span className="truncate">{album.label}</span>
-              <span className="text-base font-normal text-mute">{album.cards.length}</span>
+              <span className="text-base font-normal text-mute">{album.count}</span>
             </h2>
           </div>
         </div>
@@ -711,7 +911,7 @@ function AlbumDetail({
           >
             {allSelected ? t("action.deselectAll") : t("action.selectAll")}
           </button>
-          <DownloadZipLink albumKey={album.key} count={album.cards.length} />
+          <DownloadZipLink albumKey={album.key} count={album.count} />
           <button type="button" onClick={onReanalyze} disabled={isAnalyzing} className={PILL_GHOST}>
             {isAnalyzing && !cardProps.selectionMode && <Spinner />}
             {t("action.reanalyze")}
@@ -720,7 +920,47 @@ function AlbumDetail({
       </div>
 
       <CardGrid {...cardProps} cards={album.cards} />
+      {hasMore && <LoadMore loading={loadingMore} error={loadError} onLoad={onLoadMore} />}
     </>
+  );
+}
+
+// Loads the next page when scrolled near the bottom; the button is also there
+// to press, and to retry after an error.
+function LoadMore({
+  loading,
+  error,
+  onLoad,
+}: {
+  loading: boolean;
+  error: string | null;
+  onLoad: () => void;
+}) {
+  const t = useT();
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    // After an error, wait for the user instead of retrying in a loop.
+    if (!el || loading || error) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoad();
+      },
+      { rootMargin: "600px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loading, error, onLoad]);
+
+  return (
+    <div ref={ref} className="mt-8 flex flex-col items-center gap-2">
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <button type="button" onClick={onLoad} disabled={loading} className={PILL_GHOST}>
+        {loading && <Spinner />}
+        {loading ? t("gallery.loadingMore") : t("gallery.loadMore")}
+      </button>
+    </div>
   );
 }
 

@@ -180,10 +180,20 @@ export async function deleteAllPhotos(confirmation: string): Promise<SettingsRes
   if (!user) return { ok: false, error: "You are not logged in." };
 
   // RLS limits this to the user's own rows.
-  const { data: rows, error } = await supabase.from("screenshots").select("storage_path");
-  if (error) return { ok: false, error: error.message };
+  // Thumbnails (migration 010) are separate files, so remove them too.
+  const find = (columns: string) =>
+    supabase
+      .from("screenshots")
+      .select(columns)
+      .overrideTypes<{ storage_path: string; thumbnail_path?: string | null }[], { merge: false }>();
+  let { data: rows, error } = await find("storage_path, thumbnail_path");
+  // 42703 = undefined column: migration 010 not applied yet.
+  if (error?.code === "42703") ({ data: rows, error } = await find("storage_path"));
+  if (error || !rows) return { ok: false, error: error?.message ?? "Could not load photos." };
 
-  const paths = rows.map((r) => r.storage_path);
+  const paths = rows.flatMap((r) =>
+    r.thumbnail_path ? [r.storage_path, r.thumbnail_path] : [r.storage_path],
+  );
   for (let i = 0; i < paths.length; i += REMOVE_BATCH) {
     const { error: removeError } = await supabase.storage
       .from(BUCKET)

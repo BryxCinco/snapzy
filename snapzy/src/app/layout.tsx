@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Caveat, Poppins } from "next/font/google";
 import { ConfirmHost } from "@/components/confirm-dialog";
 import { ThemeSync } from "@/components/preferences";
+import { PwaRegister } from "@/components/pwa-register";
 import { themeBootScript } from "@/lib/theme-boot";
 import "./globals.css";
 
@@ -44,6 +45,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col overflow-x-clip bg-paper font-sans text-ink">
         <ThemeSync />
         <ConfirmHost />
+        <PwaRegister />
         {children}
       </body>
     </html>

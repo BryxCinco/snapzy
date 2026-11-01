@@ -56,7 +56,7 @@ const PRINT_SLOTS = [
 ];
 
 export function GalleryHero({
-  cards,
+  photoCount,
   albumCount,
   firstName,
   toSort,
@@ -68,7 +68,8 @@ export function GalleryHero({
   onCancel,
   onOpenPhoto,
 }: {
-  cards: ScreenshotCardData[];
+  // Photos in the whole library (the gallery may have loaded fewer).
+  photoCount: number;
   albumCount: number;
   firstName: string;
   // Photos waiting for analysis (new, failed, stuck, uncategorized).
@@ -102,7 +103,7 @@ export function GalleryHero({
             {t("hero.subtitle")}
           </p>
           <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium ring-1 ring-white/25">
-            {t("settings.libraryValue", { photos: cards.length, albums: albumCount })}
+            {t("settings.libraryValue", { photos: photoCount, albums: albumCount })}
           </p>
         </div>
 
@@ -287,7 +288,7 @@ function Pile({
           } ${busy ? "animate-pulse" : ""}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={p.url} alt="" className="h-full w-full rounded-sm object-cover" />
+          <img src={p.thumbUrl} alt="" className="h-full w-full rounded-sm object-cover" />
         </button>
       ))}
       {extra > 0 && (

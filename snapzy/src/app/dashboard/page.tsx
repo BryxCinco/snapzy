@@ -3,11 +3,9 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import type { ScreenshotCardData } from "@/components/screenshot-card";
-import { NOT_ANALYZED_YET, type ProcessingStatus, QUOTA_ERROR_MESSAGE, STUCK_AFTER_MS } from "@/lib/categories";
 import { getAvatarUrl } from "@/lib/avatar-server";
 import { getUserCategories } from "@/lib/categories-server";
-import { parseMetadata } from "@/lib/metadata";
+import { loadAlbumCounts, loadScreenshotCards } from "@/lib/screenshots-server";
 import { createClient } from "@/lib/supabase/server";
 import { Logo, WatercolorBackdrop } from "@/components/watercolor";
 import { GalleryView } from "./gallery-view";
@@ -15,8 +13,6 @@ import { MobileNav } from "./mobile-nav";
 import { SearchBar, SearchBarFallback } from "./search-bar";
 
 export const metadata: Metadata = { title: "Dashboard · Snapzy" };
-
-const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
 // With cacheComponents on, the page shell is static and anything that reads
 // the session (cookies) streams in behind <Suspense>.
@@ -116,50 +112,18 @@ async function CurrentUser() {
   );
 }
 
-const SCREENSHOT_COLUMNS =
-  "id, storage_path, original_filename, created_at, summary, ocr_text, category_id, status, processing_error, processing_started_at, screenshot_tags(tags(name))";
-
-async function loadScreenshots(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const query = (columns: string) =>
-    supabase
-      .from("screenshots")
-      .select(columns)
-      .eq("is_archived", false)
-      .order("created_at", { ascending: false })
-      .overrideTypes<ScreenshotRow[], { merge: false }>();
-
-  const result = await query(`${SCREENSHOT_COLUMNS}, metadata`);
-  // 42703 = undefined column: migration 007 (metadata) not applied yet.
-  // The gallery still works, just without smart cards.
-  if (result.error?.code === "42703") return query(SCREENSHOT_COLUMNS);
-  return result;
-}
-
-type ScreenshotRow = {
-  id: string;
-  storage_path: string;
-  original_filename: string | null;
-  created_at: string;
-  summary: string | null;
-  ocr_text: string | null;
-  category_id: string | null;
-  status: string | null;
-  processing_error: string | null;
-  processing_started_at: string | null;
-  metadata?: unknown;
-  screenshot_tags: unknown;
-};
-
 async function Gallery() {
   const user = await getSessionUser();
   const supabase = await createClient();
 
-  // RLS limits both queries to the logged-in user's rows.
-  const [{ data: rows, error }, categories] = await Promise.all([
-    loadScreenshots(supabase),
+  // RLS limits every query to the logged-in user's rows. Only the newest
+  // page is loaded here; the gallery asks for older photos as you scroll.
+  const [first, categories, albumCounts] = await Promise.all([
+    loadScreenshotCards(supabase),
     getUserCategories(supabase, user.id).catch((err: { message?: string }) => ({
       error: err?.message ?? "Unknown error",
     })),
+    loadAlbumCounts(supabase),
   ]);
 
   if ("error" in categories) {
@@ -178,78 +142,23 @@ async function Gallery() {
     );
   }
 
-  if (error) {
+  if (!first.ok) {
     return (
       <p className="rounded-3xl bg-red-50 px-5 py-4 text-sm text-red-700 ring-1 ring-red-200">
-        Couldn&apos;t load your screenshots: {error.message}
+        Couldn&apos;t load your screenshots: {first.error}
       </p>
     );
   }
 
-  if (!rows || rows.length === 0) {
-    return <GalleryView cards={[]} categories={categories} firstName={firstNameFrom(user.email)} />;
-  }
-
-  // The bucket is private, so sign every path in one round trip.
-  const { data: signed } = await supabase.storage
-    .from("screenshots")
-    .createSignedUrls(
-      rows.map((r) => r.storage_path),
-      SIGNED_URL_TTL_SECONDS,
-    );
-  const urlByPath = new Map(
-    (signed ?? [])
-      .filter((s) => s.signedUrl)
-      .map((s) => [s.path, s.signedUrl]),
+  return (
+    <GalleryView
+      cards={first.cards}
+      total={first.total ?? first.cards.length}
+      albumCounts={albumCounts}
+      categories={categories}
+      firstName={firstNameFrom(user.email)}
+    />
   );
-
-  const now = requestTime();
-  const cards: ScreenshotCardData[] = rows.flatMap((r) => {
-    const url = urlByPath.get(r.storage_path);
-    if (!url) return [];
-    // Before migration 008, "new" uploads are stored as a marked "failed".
-    const status = (
-      r.status === "failed" && r.processing_error === NOT_ANALYZED_YET ? "new" : (r.status ?? "done")
-    ) as ProcessingStatus;
-    const startedAt = new Date(r.processing_started_at ?? r.created_at).getTime();
-    return [
-      {
-        id: r.id,
-        url,
-        filename: r.original_filename ?? r.storage_path.split("/").pop() ?? "",
-        createdAt: r.created_at,
-        status,
-        stuck:
-          (status === "pending" || status === "processing") &&
-          now - startedAt > STUCK_AFTER_MS,
-        summary: r.summary,
-        ocrText: r.ocr_text ?? null,
-        error: r.status === "failed" && r.processing_error === QUOTA_ERROR_MESSAGE ? r.processing_error : null,
-        categoryId: r.category_id ?? null,
-        metadata: parseMetadata(r.metadata),
-        tags: extractTagNames(r.screenshot_tags),
-      },
-    ];
-  });
-
-  return <GalleryView cards={cards} categories={categories} firstName={firstNameFrom(user.email)} />;
-}
-
-// Only called after `await connection()`, so this is per-request time, not a
-// value baked into a prerender.
-function requestTime() {
-  return Date.now();
-}
-
-// Supabase returns the nested join as an array (or a single object,
-// depending on how it infers the relationship) — accept both.
-function extractTagNames(links: unknown): string[] {
-  if (!Array.isArray(links)) return [];
-  return links.flatMap((link: { tags?: { name: string } | { name: string }[] | null }) => {
-    const t = link.tags;
-    if (!t) return [];
-    return Array.isArray(t) ? t.map((x) => x.name) : [t.name];
-  });
 }
 
 const skeletonHeights = ["h-48", "h-72", "h-60", "h-80", "h-52", "h-64", "h-56", "h-48"];

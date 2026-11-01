@@ -7,8 +7,9 @@ import { after } from "next/server";
 // Gemini rate limits.
 import { BULK_CONCURRENCY, NOT_ANALYZED_YET, STUCK_AFTER_MS } from "@/lib/categories";
 import { createClient } from "@/lib/supabase/server";
-import { heicToJpeg } from "@/lib/heic";
-import { isAllowedUpload, isHeicFile, MAX_UPLOAD_BYTES } from "@/lib/uploads";
+import { saveUpload } from "@/lib/save-upload";
+import { loadScreenshotCards } from "@/lib/screenshots-server";
+import type { ScreenshotCardData } from "@/components/screenshot-card";
 import { claimScreenshot, processScreenshot } from "./process-screenshot";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -20,46 +21,12 @@ const BUCKET = "screenshots";
 // Caps one bulk request so a single click can't fire hundreds of AI calls.
 const MAX_BULK_IDS = 100;
 
-// Keep storage keys URL-safe; the original name is stored separately.
-function sanitizeFilename(name: string) {
-  const cleaned = name
-    .normalize("NFKD")
-    .replace(/[^a-zA-Z0-9._-]+/g, "_")
-    .replace(/_+/g, "_")
-    .replace(/^[_.]+/, "");
-  return (cleaned || "screenshot").slice(-100);
-}
-
 export async function uploadScreenshot(
   formData: FormData,
 ): Promise<ActionResult> {
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) {
+  if (!(file instanceof File)) {
     return { ok: false, error: "No file received." };
-  }
-  if (!isAllowedUpload(file)) {
-    return { ok: false, error: `${file.name}: only PNG, JPG, WEBP, GIF or HEIC.` };
-  }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return { ok: false, error: `${file.name}: file is larger than 10 MB.` };
-  }
-
-  // HEIC/HEIF (iPhone) is converted to JPEG before it is stored, so the rest
-  // of the app (AI, thumbnails, downloads) never sees it.
-  let body: File | Uint8Array = file;
-  let filename = file.name;
-  let mimeType = file.type;
-  if (isHeicFile(file)) {
-    try {
-      body = await heicToJpeg(new Uint8Array(await file.arrayBuffer()));
-    } catch {
-      return { ok: false, error: `${file.name}: couldn't read this HEIC file.` };
-    }
-    if (body.byteLength > MAX_UPLOAD_BYTES) {
-      return { ok: false, error: `${file.name}: file is larger than 10 MB after conversion.` };
-    }
-    filename = filename.replace(/\.(heic|heif)$/i, "") + ".jpg";
-    mimeType = "image/jpeg";
   }
 
   const supabase = await createClient();
@@ -70,45 +37,9 @@ export async function uploadScreenshot(
     return { ok: false, error: "You are not logged in." };
   }
 
-  // RLS on storage requires the first folder to be the user's id.
-  const storagePath = `${user.id}/${Date.now()}_${sanitizeFilename(filename)}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(storagePath, body, { contentType: mimeType, upsert: false });
-  if (uploadError) {
-    return { ok: false, error: `${file.name}: ${uploadError.message}` };
-  }
-
-  // Store the path, not a URL: the bucket is private and signed URLs expire.
-  // They are generated fresh each time the gallery renders.
-  // Uploads are not analyzed automatically: they wait as "new" until the
-  // user presses "Sort photos".
-  const row = {
-    user_id: user.id,
-    storage_path: storagePath,
-    original_filename: filename,
-    file_size: body instanceof File ? body.size : body.byteLength,
-    mime_type: mimeType,
-  };
-  let { error: insertError } = await supabase
-    .from("screenshots")
-    .insert({ ...row, status: "new" });
-  // 23514 = check violation: migration 008 (status 'new') not applied yet.
-  // Fall back to a marked "failed" row, which the gallery shows as new.
-  if (insertError?.code === "23514") {
-    ({ error: insertError } = await supabase
-      .from("screenshots")
-      .insert({ ...row, status: "failed", processing_error: NOT_ANALYZED_YET }));
-  }
-  if (insertError) {
-    // Don't leave an orphaned file behind if the row couldn't be saved.
-    await supabase.storage.from(BUCKET).remove([storagePath]);
-    return { ok: false, error: `${file.name}: ${insertError.message}` };
-  }
-
-  revalidatePath("/dashboard");
-  return { ok: true };
+  const result = await saveUpload(supabase, user, file);
+  if (result.ok) revalidatePath("/dashboard");
+  return result;
 }
 
 export async function retryProcessing(
@@ -129,6 +60,8 @@ type QueueRow = {
   status: string;
   category_id: string | null;
   processing_started_at: string | null;
+  // Undefined until migration 010 is applied.
+  is_manually_moved?: boolean;
 };
 
 // New (never analyzed) and failed items, items stuck mid-run, and finished items without a category
@@ -173,18 +106,28 @@ export async function analyzeMultipleScreenshots(
   }
 
   // RLS drops any ids that belong to someone else.
-  const { data: rows, error } = await supabase
-    .from("screenshots")
-    .select("id, storage_path, mime_type, status, category_id, processing_started_at")
-    .in("id", uniqueIds)
-    .order("created_at", { ascending: false });
-  if (error) {
-    return { ok: false, error: error.message };
+  const find = (columns: string) =>
+    supabase
+      .from("screenshots")
+      .select(columns)
+      .in("id", uniqueIds)
+      .order("created_at", { ascending: false })
+      .overrideTypes<QueueRow[], { merge: false }>();
+  const baseColumns = "id, storage_path, mime_type, status, category_id, processing_started_at";
+  let { data: rows, error } = await find(`${baseColumns}, is_manually_moved`);
+  // 42703 = undefined column: migration 010 (manual-move flag) not applied yet.
+  if (error?.code === "42703") ({ data: rows, error } = await find(baseColumns));
+  if (error || !rows) {
+    return { ok: false, error: error?.message ?? "Could not load the screenshots." };
   }
 
   const now = Date.now();
   const limit = options.limit && options.limit > 0 ? Math.floor(options.limit) : undefined;
-  const toQueue = (rows as QueueRow[])
+  const toQueue = rows
+    // A finished photo the user filed by hand is never re-analyzed, so the
+    // AI can't undo their choice. (Unfinished ones still get read; their
+    // album is kept, see processScreenshot.)
+    .filter((r) => !(r.is_manually_moved && r.status === "done"))
     .filter((r) => options.includeDone || needsAnalysis(r, now))
     .slice(0, limit);
   if (toQueue.length === 0) {
@@ -341,18 +284,23 @@ export async function deleteScreenshot(
 ): Promise<ActionResult> {
   const supabase = await createClient();
 
-  const { data: row } = await supabase
-    .from("screenshots")
-    .select("id, storage_path")
-    .eq("id", screenshotId)
-    .maybeSingle();
+  const find = (columns: string) =>
+    supabase
+      .from("screenshots")
+      .select(columns)
+      .eq("id", screenshotId)
+      .maybeSingle<{ id: string; storage_path: string; thumbnail_path?: string | null }>();
+  let found = await find("id, storage_path, thumbnail_path");
+  // 42703 = undefined column: migration 010 (thumbnails) not applied yet.
+  if (found.error?.code === "42703") found = await find("id, storage_path");
+  const row = found.data;
   if (!row) {
     return { ok: false, error: "Screenshot not found." };
   }
 
   const { error: storageError } = await supabase.storage
     .from(BUCKET)
-    .remove([row.storage_path]);
+    .remove(row.thumbnail_path ? [row.storage_path, row.thumbnail_path] : [row.storage_path]);
   if (storageError) {
     return { ok: false, error: storageError.message };
   }
@@ -368,4 +316,57 @@ export async function deleteScreenshot(
 
   revalidatePath("/dashboard");
   return { ok: true };
+}
+
+export type LoadCardsResult =
+  | { ok: true; cards: ScreenshotCardData[] }
+  | { ok: false; error: string };
+
+const MAX_FETCH_IDS = 200;
+
+async function requireSignedIn() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return { supabase, user };
+}
+
+/**
+ * The next page of an album ("all", "unsorted" or a category id): photos older
+ * than `before` (the created_at of the oldest one the gallery already has).
+ */
+export async function loadMoreScreenshots(
+  album: string,
+  before: string | null,
+): Promise<LoadCardsResult> {
+  const { supabase, user } = await requireSignedIn();
+  if (!user) return { ok: false, error: "You are not logged in." };
+  if (typeof album !== "string" || album === "") {
+    return { ok: false, error: "Unknown album." };
+  }
+  if (before !== null && Number.isNaN(Date.parse(String(before)))) {
+    return { ok: false, error: "Bad cursor." };
+  }
+
+  const result = await loadScreenshotCards(supabase, { album, before });
+  return result.ok ? { ok: true, cards: result.cards } : result;
+}
+
+/**
+ * Specific photos by id: search hits and an opened photo that are beyond the
+ * pages loaded so far, and a refresh of the pages loaded after the first.
+ * Ids that no longer exist are simply missing from the answer.
+ */
+export async function loadScreenshotsByIds(ids: string[]): Promise<LoadCardsResult> {
+  const { supabase, user } = await requireSignedIn();
+  if (!user) return { ok: false, error: "You are not logged in." };
+
+  const unique = [...new Set(Array.isArray(ids) ? ids : [])]
+    .filter((id): id is string => typeof id === "string")
+    .slice(0, MAX_FETCH_IDS);
+  if (unique.length === 0) return { ok: true, cards: [] };
+
+  const result = await loadScreenshotCards(supabase, { ids: unique });
+  return result.ok ? { ok: true, cards: result.cards } : result;
 }

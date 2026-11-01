@@ -9,7 +9,20 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "11mb",
     },
-    proxyClientMaxBodySize: "11mb",
+    // The share target can receive several photos in one request.
+    proxyClientMaxBodySize: "40mb",
+  },
+  async headers() {
+    return [
+      {
+        // The service worker must never be served from a stale HTTP cache.
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Type", value: "application/javascript; charset=utf-8" },
+        ],
+      },
+    ];
   },
   cacheComponents: true,
   partialPrefetching: true,

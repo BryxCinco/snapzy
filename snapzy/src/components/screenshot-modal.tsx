@@ -290,7 +290,7 @@ function ModalContent({
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={r.url}
+                          src={r.thumbUrl}
                           alt={r.summary ?? r.filename}
                           loading="lazy"
                           className="h-full w-full rounded-lg object-cover"

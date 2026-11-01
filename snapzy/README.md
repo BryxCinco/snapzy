@@ -152,6 +152,7 @@ In the Supabase dashboard, open **SQL Editor, New query** and run these files **
 | 7 | `supabase/migrations/007_smart_metadata.sql` | `metadata` jsonb column for smart cards |
 | 8 | `supabase/migrations/008_manual_sort.sql` | Allows status `new` (manual sorting) |
 | 9 | `supabase/migrations/009_delete_account.sql` | `delete_my_account()` function |
+| 10 | `supabase/migrations/010_thumbnails_dedupe_manual_move.sql` | Thumbnails, duplicate detection (file hash), manual-move flag, `screenshot_counts()` |
 
 All files are safe to re-run. If a step is missing, the app shows a message pointing to the right file (for example, account deletion explains that 009 hasn't been run).
 
@@ -221,19 +222,20 @@ snapzy/
 - HEIC (iPhone default) isn't accepted yet. Convert to JPG first.
 - Background sorting runs after the response. On hosts with short function time limits a long run could be cut off; the 10-photo batch reduces this.
 - The learned sort speed is stored per device (browser storage).
-- Large libraries load full-size images; thumbnails and pagination are planned.
+- Photos uploaded before migration 010 have no thumbnail yet, so the grid shows the full image for those.
+- Photos are loaded 50 at a time; Select all, Re-analyze all and Sort work on the photos loaded so far.
 
 ## Roadmap
 
-- [ ] Thumbnails and infinite scroll
+- [x] Thumbnails and infinite scroll
 - [ ] Clear message when the daily AI quota is reached
 - [ ] Durable background job queue
 - [ ] Forgot-password flow
 - [ ] HEIC upload support
-- [ ] Duplicate detection
+- [x] Duplicate detection
 - [ ] Reverse image search (find where a picture came from)
-- [ ] Share-to-Snapzy from the phone gallery
-- [ ] Keep manual album moves out of Re-analyze
+- [x] Share-to-Snapzy from the phone gallery (Android/Chrome installed app)
+- [x] Keep manual album moves out of Re-analyze
 - [ ] Automated tests
 
 ## Deployment

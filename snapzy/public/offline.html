@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#5b74d3" />
+    <title>Offline · Snapzy</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: #f1f4f8;
+        color: #1f2937;
+        text-align: center;
+      }
+      main { max-width: 22rem; }
+      img { width: 88px; height: 88px; border-radius: 22px; }
+      h1 { margin: 20px 0 8px; font-size: 1.4rem; }
+      p { margin: 0 0 20px; color: #6b7280; line-height: 1.5; }
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 24px;
+        background: #5b74d3;
+        color: #fff;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #12161d; color: #e5e7eb; }
+        p { color: #9ca3af; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/brand/icon-192.png" alt="" />
+      <h1>You're offline</h1>
+      <p>Snapzy needs a connection to load your photos. Check your internet and try again.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>

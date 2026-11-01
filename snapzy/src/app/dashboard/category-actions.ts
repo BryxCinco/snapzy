@@ -155,11 +155,12 @@ export async function updateScreenshotCategory(
 
   // RLS limits the update to the user's own screenshot; select() tells us
   // whether a row actually matched.
-  const { data, error } = await supabase
-    .from("screenshots")
-    .update({ category_id: newCategoryId })
-    .eq("id", screenshotId)
-    .select("id");
+  const move = (fields: Record<string, unknown>) =>
+    supabase.from("screenshots").update(fields).eq("id", screenshotId).select("id");
+  // is_manually_moved keeps re-analyze from undoing this choice.
+  let { data, error } = await move({ category_id: newCategoryId, is_manually_moved: true });
+  // PGRST204 = unknown column: migration 010 not applied yet.
+  if (error?.code === "PGRST204") ({ data, error } = await move({ category_id: newCategoryId }));
   if (error) return { ok: false, error: error.message };
   if (!data || data.length === 0) {
     return { ok: false, error: "Screenshot not found." };

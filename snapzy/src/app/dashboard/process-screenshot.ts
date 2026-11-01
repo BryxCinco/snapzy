@@ -55,10 +55,19 @@ export async function processScreenshot(
       ) ??
       fallback;
 
+    // A photo the user filed by hand keeps its album (migration 010; the
+    // column is missing before that, which reads as "not moved").
+    const { data: current } = await supabase
+      .from("screenshots")
+      .select("is_manually_moved")
+      .eq("id", screenshotId)
+      .maybeSingle<{ is_manually_moved: boolean }>();
+    const keepCategory = current?.is_manually_moved === true;
+
     const result = {
       ocr_text: analysis.ocr_text,
       summary: analysis.summary,
-      category_id: chosen.id,
+      ...(keepCategory ? {} : { category_id: chosen.id }),
       status: "done",
       processing_error: null,
     };

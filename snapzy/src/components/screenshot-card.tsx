@@ -22,7 +22,10 @@ import {
 
 export type ScreenshotCardData = {
   id: string;
+  // Full-size image (detail modal, download).
   url: string;
+  // 400px preview for grids; the same as `url` for photos uploaded before thumbnails.
+  thumbUrl: string;
   filename: string;
   createdAt: string;
   status: ProcessingStatus;
@@ -217,7 +220,7 @@ export function ScreenshotCard({
             next/image's optimizer cache would never hit. */}
         <motion.img
           layoutId={photoLayoutId(screenshot.id)}
-          src={screenshot.url}
+          src={screenshot.thumbUrl}
           alt={summary ?? screenshot.filename}
           loading="lazy"
           decoding="async"
