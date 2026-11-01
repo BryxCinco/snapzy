@@ -89,6 +89,9 @@ export function ScreenshotCard({
   const [isMoving, startMove] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // Touch screens: the four action buttons fold into one "more" button, so
+  // they never crowd a small photo.
+  const [actionsOpen, setActionsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -252,10 +255,30 @@ export function ScreenshotCard({
           </svg>
         </button>
 
-        <div
-          className={`absolute top-2.5 right-2.5 flex gap-1.5 transition ${
-            menuOpen ? "opacity-100" : HOVER_REVEAL
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setActionsOpen((open) => !open);
+            setMenuOpen(false);
+          }}
+          aria-expanded={actionsOpen}
+          aria-label={`More actions for ${screenshot.filename}`}
+          className={`absolute top-2.5 right-2.5 hidden h-8 w-8 place-items-center rounded-full shadow-soft backdrop-blur transition [@media(hover:none)]:grid ${
+            actionsOpen ? "bg-brand text-white" : "bg-card/90 text-ink/70"
           }`}
+        >
+          <svg aria-hidden viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+            <circle cx="5" cy="12" r="1.8" />
+            <circle cx="12" cy="12" r="1.8" />
+            <circle cx="19" cy="12" r="1.8" />
+          </svg>
+        </button>
+
+        <div
+          className={`absolute top-2.5 right-2.5 flex gap-1.5 transition [@media(hover:none)]:top-12 [@media(hover:none)]:flex-col ${
+            menuOpen ? "opacity-100" : HOVER_REVEAL
+          } ${actionsOpen ? "" : "[@media(hover:none)]:hidden"}`}
           onClick={(e) => e.stopPropagation()}
         >
           {screenshot.ocrText && (
@@ -317,7 +340,7 @@ export function ScreenshotCard({
           ref={menuRef}
           role="menu"
           aria-label="Move to album"
-          className="absolute top-13 right-3 z-30 max-h-72 w-56 overflow-y-auto rounded-2xl bg-card p-1.5 shadow-lift ring-1 ring-line"
+          className="absolute top-13 right-3 z-30 max-h-72 w-56 overflow-y-auto max-sm:right-auto max-sm:left-3 max-sm:w-[calc(100%-1.5rem)] rounded-2xl bg-card p-1.5 shadow-lift ring-1 ring-line"
         >
           <p className="px-3 pt-1.5 pb-1 font-hand text-lg text-mute">{t("card.moveTo")}</p>
           {categories.map((c) => {
