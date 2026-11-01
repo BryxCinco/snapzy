@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 // BULK_CONCURRENCY: parallel AI calls during a bulk run; higher trips
 // Gemini rate limits.
-import { BULK_CONCURRENCY, NOT_ANALYZED_YET, STUCK_AFTER_MS } from "@/lib/categories";
+import { BULK_CONCURRENCY, NOT_ANALYZED_YET, SORT_BATCH, STUCK_AFTER_MS } from "@/lib/categories";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { createClient } from "@/lib/supabase/server";
 import { saveUpload } from "@/lib/save-upload";
 import { loadScreenshotCards } from "@/lib/screenshots-server";
@@ -133,6 +134,10 @@ export async function analyzeMultipleScreenshots(
   if (toQueue.length === 0) {
     return { ok: true, queued: 0, skipped: uniqueIds.length };
   }
+
+  // One unit per SORT_BATCH photos, so a normal "Sort photos" press costs 1.
+  const allowed = await checkRateLimit(supabase, "sort", toQueue.length / SORT_BATCH);
+  if (!allowed.ok) return { ok: false, error: allowed.error };
 
   // Flip them to pending now so the cards show spinners on the next render.
   const { error: markError } = await supabase

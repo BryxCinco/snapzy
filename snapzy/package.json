@@ -13,6 +13,7 @@
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "ai": "^7.0.143",
+    "file-type": "^22.3.0",
     "heic-convert": "^2.1.0",
     "jsqr": "^1.4.0",
     "jszip": "^3.10.2",

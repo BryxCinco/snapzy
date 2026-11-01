@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fileTypeFromBuffer } from "file-type";
 import { createHash } from "node:crypto";
 import sharp from "sharp";
 import { NOT_ANALYZED_YET } from "@/lib/categories";
 import { heicToJpeg } from "@/lib/heic";
-import { isAllowedUpload, isHeicFile, MAX_UPLOAD_BYTES } from "@/lib/uploads";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { MAX_UPLOAD_BYTES } from "@/lib/uploads";
 
 export type UploadResult = { ok: true } | { ok: false; error: string };
 
@@ -11,6 +13,17 @@ const BUCKET = "screenshots";
 const THUMB_SIZE = 400;
 
 export const DUPLICATE_MESSAGE = "This screenshot already exists in your library.";
+
+// What the file really is, from its first bytes (not its name or the MIME
+// type the browser claims). HEIC/HEIF is converted to JPEG further down.
+const REAL_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "image/heic",
+  "image/heif",
+]);
 
 // Keep storage keys URL-safe; the original name is stored separately.
 function sanitizeFilename(name: string) {
@@ -20,6 +33,32 @@ function sanitizeFilename(name: string) {
     .replace(/_+/g, "_")
     .replace(/^[_.]+/, "");
   return (cleaned || "screenshot").slice(-100);
+}
+
+/**
+ * Re-encodes a PNG/JPEG/WEBP so every piece of metadata is gone (EXIF, GPS
+ * location, camera and device info, XMP, comments). sharp drops metadata
+ * unless told to keep it; rotate() first applies the EXIF orientation so the
+ * picture stays upright without the tag. Output is sRGB.
+ * Animated images (and GIFs, which carry no EXIF) are stored as they are.
+ */
+async function stripMetadata(image: Uint8Array, mime: string): Promise<Uint8Array> {
+  if (mime === "image/gif") return image;
+  const { pages } = await sharp(image).metadata();
+  if ((pages ?? 1) > 1) return image;
+
+  const encode = (quality: number) => {
+    const pipeline = sharp(image).rotate();
+    if (mime === "image/png") return pipeline.png().toBuffer();
+    if (mime === "image/webp") return pipeline.webp({ quality }).toBuffer();
+    return pipeline.jpeg({ quality }).toBuffer();
+  };
+
+  // A lossy re-encode can come out bigger than a heavily compressed original;
+  // retry smaller so it still fits the bucket's size limit.
+  let stripped = await encode(90);
+  if (stripped.byteLength > MAX_UPLOAD_BYTES && mime !== "image/png") stripped = await encode(75);
+  return stripped;
 }
 
 // A small WebP preview for the gallery grid. Fits inside THUMB_SIZE x THUMB_SIZE
@@ -33,9 +72,10 @@ async function makeThumbnail(image: Uint8Array) {
 }
 
 /**
- * Validates one uploaded image, stores it (plus a thumbnail) in the private
- * bucket and inserts its row. Shared by the upload Server Action and the
- * PWA share target. Uploads wait as "new" until the user presses "Sort photos".
+ * Validates one uploaded image, strips its metadata, stores it (plus a
+ * thumbnail) in the private bucket and inserts its row. Shared by the upload
+ * Server Action and the PWA share target. Uploads wait as "new" until the
+ * user presses "Sort photos".
  */
 export async function saveUpload(
   supabase: SupabaseClient,
@@ -43,19 +83,23 @@ export async function saveUpload(
   file: File,
 ): Promise<UploadResult> {
   if (file.size === 0) return { ok: false, error: "No file received." };
-  if (!isAllowedUpload(file)) {
-    return { ok: false, error: `${file.name}: only PNG, JPG, WEBP, GIF or HEIC.` };
-  }
   if (file.size > MAX_UPLOAD_BYTES) {
     return { ok: false, error: `${file.name}: file is larger than 10 MB.` };
   }
 
   const original = new Uint8Array(await file.arrayBuffer());
-  // Hash of exactly what the user sent (before any HEIC conversion).
+
+  // Trust the bytes, not the label: a renamed .exe or HTML file is refused.
+  const detected = await fileTypeFromBuffer(original);
+  if (!detected || !REAL_TYPES.has(detected.mime)) {
+    return { ok: false, error: `${file.name}: only real PNG, JPG, WEBP, GIF or HEIC images.` };
+  }
+
+  // Hash of exactly what the user sent (before conversion or stripping).
   const fileHash = createHash("sha256").update(original).digest("hex");
 
-  // Duplicate check. 42703 = undefined column: migration 010 not applied yet,
-  // in which case uploads still work, just without duplicate detection.
+  // Duplicate check. A lookup error (42703: migration 010 not applied yet)
+  // just means uploads work without duplicate detection.
   const { data: existing, error: lookupError } = await supabase
     .from("screenshots")
     .select("id")
@@ -66,22 +110,31 @@ export async function saveUpload(
     return { ok: false, error: `${file.name}: ${DUPLICATE_MESSAGE}` };
   }
 
-  // HEIC/HEIF (iPhone) is converted to JPEG before it is stored, so the rest
-  // of the app (AI, thumbnails, downloads) never sees it.
-  let body: Uint8Array = original;
+  // Only valid, new files use up the hourly allowance.
+  const allowed = await checkRateLimit(supabase, "upload");
+  if (!allowed.ok) return { ok: false, error: `${file.name}: ${allowed.error}` };
+
+  // HEIC/HEIF (iPhone) is converted to JPEG, so the rest of the app (AI,
+  // thumbnails, downloads) never sees it. Everything else is stripped of
+  // metadata (the conversion already drops it).
+  const isHeic = detected.mime === "image/heic" || detected.mime === "image/heif";
+  let body: Uint8Array;
   let filename = file.name;
-  let mimeType = file.type;
-  if (isHeicFile(file)) {
-    try {
+  let mimeType: string;
+  try {
+    if (isHeic) {
       body = await heicToJpeg(original);
-    } catch {
-      return { ok: false, error: `${file.name}: couldn't read this HEIC file.` };
+      filename = filename.replace(/\.(heic|heif)$/i, "") + ".jpg";
+      mimeType = "image/jpeg";
+    } else {
+      body = await stripMetadata(original, detected.mime);
+      mimeType = detected.mime;
     }
-    if (body.byteLength > MAX_UPLOAD_BYTES) {
-      return { ok: false, error: `${file.name}: file is larger than 10 MB after conversion.` };
-    }
-    filename = filename.replace(/\.(heic|heif)$/i, "") + ".jpg";
-    mimeType = "image/jpeg";
+  } catch {
+    return { ok: false, error: `${file.name}: couldn't read this image.` };
+  }
+  if (body.byteLength > MAX_UPLOAD_BYTES) {
+    return { ok: false, error: `${file.name}: file is larger than 10 MB after processing.` };
   }
 
   // RLS on storage requires the first folder to be the user's id.

@@ -153,6 +153,7 @@ In the Supabase dashboard, open **SQL Editor, New query** and run these files **
 | 8 | `supabase/migrations/008_manual_sort.sql` | Allows status `new` (manual sorting) |
 | 9 | `supabase/migrations/009_delete_account.sql` | `delete_my_account()` function |
 | 10 | `supabase/migrations/010_thumbnails_dedupe_manual_move.sql` | Thumbnails, duplicate detection (file hash), manual-move flag, `screenshot_counts()` |
+| 11 | `supabase/migrations/011_rate_limits.sql` | `rate_limits` table and `check_rate_limit()` (20 uploads and 20 AI sorts per hour) |
 
 All files are safe to re-run. If a step is missing, the app shows a message pointing to the right file (for example, account deletion explains that 009 hasn't been run).
 
@@ -212,7 +213,10 @@ snapzy/
 - **Server-only AI key.** The Gemini key has no `NEXT_PUBLIC_` prefix and is read only on the server.
 - **No service-role key** in the app. Account deletion uses a `SECURITY DEFINER` function that can only delete the caller's own account, after the password is re-checked.
 - **Secrets are masked.** The AI is told never to put passwords in captions or tags, and detected secrets are hidden until revealed.
-- **Input limits.** File type and size are checked in the browser, the server action and the bucket. Sorting is capped at 10 photos per press.
+- **Input limits.** File size is checked in the browser, the server and the bucket. The real file type is read from the file's first bytes (magic bytes), not its name or MIME type.
+- **Metadata stripped.** EXIF, GPS location and camera info are removed from every photo before it is stored.
+- **Rate limits.** Per user, per hour: 20 uploads and 20 AI sorts (one sort unit per 10 photos). Counted in the database, so it holds across servers. Tune it in `src/lib/rate-limit.ts`.
+- **Security headers.** CSP, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS and nosniff are set in `next.config.ts`.
 - Images are sent to Google for analysis. This is stated in the in-app Privacy Policy.
 
 ## Known limitations
