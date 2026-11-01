@@ -49,7 +49,7 @@ const en = {
   "upload.drop": "Drop photos here, or browse",
   "upload.release": "Let go to add them ✿",
   "upload.paste": "or paste with Ctrl + V",
-  "upload.formats": "PNG · JPG · WEBP · GIF · up to 10 MB",
+  "upload.formats": "PNG · JPG · WEBP · GIF · HEIC · up to 10 MB",
   "upload.progress": "Hanging {current} of {total}…",
 
   // Album bar / grid
@@ -221,7 +221,7 @@ const tl: Record<MessageKey, string> = {
   "upload.drop": "Ihulog dito ang mga litrato, o pumili",
   "upload.release": "Bitawan para idagdag ✿",
   "upload.paste": "o i-paste gamit ang Ctrl + V",
-  "upload.formats": "PNG · JPG · WEBP · GIF · hanggang 10 MB",
+  "upload.formats": "PNG · JPG · WEBP · GIF · HEIC · hanggang 10 MB",
   "upload.progress": "Isinasabit ang {current} sa {total}…",
 
   "albums.home": "Mga album",

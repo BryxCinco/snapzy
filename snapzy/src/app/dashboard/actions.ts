@@ -7,7 +7,8 @@ import { after } from "next/server";
 // Gemini rate limits.
 import { BULK_CONCURRENCY, NOT_ANALYZED_YET, STUCK_AFTER_MS } from "@/lib/categories";
 import { createClient } from "@/lib/supabase/server";
-import { isAllowedImageType, MAX_UPLOAD_BYTES } from "@/lib/uploads";
+import { heicToJpeg } from "@/lib/heic";
+import { isAllowedUpload, isHeicFile, MAX_UPLOAD_BYTES } from "@/lib/uploads";
 import { claimScreenshot, processScreenshot } from "./process-screenshot";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
@@ -36,11 +37,29 @@ export async function uploadScreenshot(
   if (!(file instanceof File) || file.size === 0) {
     return { ok: false, error: "No file received." };
   }
-  if (!isAllowedImageType(file.type)) {
-    return { ok: false, error: `${file.name}: only PNG, JPG, WEBP or GIF.` };
+  if (!isAllowedUpload(file)) {
+    return { ok: false, error: `${file.name}: only PNG, JPG, WEBP, GIF or HEIC.` };
   }
   if (file.size > MAX_UPLOAD_BYTES) {
     return { ok: false, error: `${file.name}: file is larger than 10 MB.` };
+  }
+
+  // HEIC/HEIF (iPhone) is converted to JPEG before it is stored, so the rest
+  // of the app (AI, thumbnails, downloads) never sees it.
+  let body: File | Uint8Array = file;
+  let filename = file.name;
+  let mimeType = file.type;
+  if (isHeicFile(file)) {
+    try {
+      body = await heicToJpeg(new Uint8Array(await file.arrayBuffer()));
+    } catch {
+      return { ok: false, error: `${file.name}: couldn't read this HEIC file.` };
+    }
+    if (body.byteLength > MAX_UPLOAD_BYTES) {
+      return { ok: false, error: `${file.name}: file is larger than 10 MB after conversion.` };
+    }
+    filename = filename.replace(/\.(heic|heif)$/i, "") + ".jpg";
+    mimeType = "image/jpeg";
   }
 
   const supabase = await createClient();
@@ -52,11 +71,11 @@ export async function uploadScreenshot(
   }
 
   // RLS on storage requires the first folder to be the user's id.
-  const storagePath = `${user.id}/${Date.now()}_${sanitizeFilename(file.name)}`;
+  const storagePath = `${user.id}/${Date.now()}_${sanitizeFilename(filename)}`;
 
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
-    .upload(storagePath, file, { contentType: file.type, upsert: false });
+    .upload(storagePath, body, { contentType: mimeType, upsert: false });
   if (uploadError) {
     return { ok: false, error: `${file.name}: ${uploadError.message}` };
   }
@@ -68,9 +87,9 @@ export async function uploadScreenshot(
   const row = {
     user_id: user.id,
     storage_path: storagePath,
-    original_filename: file.name,
-    file_size: file.size,
-    mime_type: file.type,
+    original_filename: filename,
+    file_size: body instanceof File ? body.size : body.byteLength,
+    mime_type: mimeType,
   };
   let { error: insertError } = await supabase
     .from("screenshots")

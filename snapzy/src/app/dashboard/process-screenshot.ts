@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { analyzeScreenshot } from "@/lib/ai/analyze-screenshot";
+import { analyzeScreenshot, isQuotaError } from "@/lib/ai/analyze-screenshot";
+import { QUOTA_ERROR_MESSAGE } from "@/lib/categories";
 import { fallbackCategory, getUserCategories } from "@/lib/categories-server";
 
 /**
@@ -83,7 +84,11 @@ export async function processScreenshot(
 
     await saveTags(supabase, screenshotId, userId, analysis.tags);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    const message = isQuotaError(err)
+      ? QUOTA_ERROR_MESSAGE
+      : err instanceof Error
+        ? err.message
+        : String(err);
     console.error(`[snapzy] AI processing failed for ${screenshotId}:`, message);
     await supabase
       .from("screenshots")

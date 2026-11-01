@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED_PREFIXES = ["/dashboard"];
+const PROTECTED_PREFIXES = ["/dashboard", "/auth/update-password"];
 const AUTH_PAGES = ["/login", "/signup"];
 
 // Refreshes the Supabase session on every request and keeps the auth cookies

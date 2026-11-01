@@ -13,3 +13,16 @@ export const ALLOWED_IMAGE_TYPES = [
 export function isAllowedImageType(type: string) {
   return (ALLOWED_IMAGE_TYPES as readonly string[]).includes(type);
 }
+
+// iPhone photos. Browsers often leave `type` empty for these (Windows,
+// Chrome), so the extension counts too. They are converted to JPEG on upload,
+// so the bucket only ever sees the types above.
+const HEIC_TYPES = ["image/heic", "image/heif"];
+
+export function isHeicFile(file: { name: string; type: string }) {
+  return HEIC_TYPES.includes(file.type.toLowerCase()) || /\.(heic|heif)$/i.test(file.name);
+}
+
+export function isAllowedUpload(file: { name: string; type: string }) {
+  return isAllowedImageType(file.type) || isHeicFile(file);
+}

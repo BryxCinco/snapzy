@@ -103,3 +103,7 @@ export const SORT_BATCH = 10;
 // A healthy analysis takes seconds, but bulk runs queue several at once.
 // After this long in pending/processing we assume the job died and offer a retry.
 export const STUCK_AFTER_MS = 10 * 60 * 1000;
+
+// Saved as processing_error when Gemini answers 429 / out of quota on every
+// model. The card shows this text instead of the generic "couldn't read" one.
+export const QUOTA_ERROR_MESSAGE = "Daily AI limit reached. Try again tomorrow.";

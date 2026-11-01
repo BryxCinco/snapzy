@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
 import type { ScreenshotCardData } from "@/components/screenshot-card";
-import { NOT_ANALYZED_YET, type ProcessingStatus, STUCK_AFTER_MS } from "@/lib/categories";
+import { NOT_ANALYZED_YET, type ProcessingStatus, QUOTA_ERROR_MESSAGE, STUCK_AFTER_MS } from "@/lib/categories";
 import { getAvatarUrl } from "@/lib/avatar-server";
 import { getUserCategories } from "@/lib/categories-server";
 import { parseMetadata } from "@/lib/metadata";
@@ -224,6 +224,7 @@ async function Gallery() {
           now - startedAt > STUCK_AFTER_MS,
         summary: r.summary,
         ocrText: r.ocr_text ?? null,
+        error: r.status === "failed" && r.processing_error === QUOTA_ERROR_MESSAGE ? r.processing_error : null,
         categoryId: r.category_id ?? null,
         metadata: parseMetadata(r.metadata),
         tags: extractTagNames(r.screenshot_tags),

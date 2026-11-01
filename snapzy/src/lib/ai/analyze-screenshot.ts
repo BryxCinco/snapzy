@@ -271,3 +271,11 @@ async function generateWithFallback(
   }
   throw lastError;
 }
+
+// True when Gemini refused because the (free-tier) quota or rate limit is used up.
+export function isQuotaError(err: unknown): boolean {
+  const cause = RetryError.isInstance(err) ? err.lastError : err;
+  if (APICallError.isInstance(cause) && cause.statusCode === 429) return true;
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return /quota|RESOURCE_EXHAUSTED|too many requests/i.test(message);
+}

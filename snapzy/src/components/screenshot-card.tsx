@@ -34,6 +34,8 @@ export type ScreenshotCardData = {
   // Structured data the AI found (WiFi, flight, payment), if any.
   metadata: ScreenshotMetadata | null;
   tags: string[];
+  // Set only for failures worth explaining, e.g. the daily AI quota.
+  error: string | null;
 };
 
 type Props = {
@@ -427,7 +429,7 @@ export function ScreenshotCard({
             }`}
           >
             <p className={`text-xs ${isNew ? "text-brand-deep" : "text-red-600"}`}>
-              {isNew ? t("card.notSorted") : screenshot.stuck ? t("card.tooLong") : t("card.failed")}
+              {isNew ? t("card.notSorted") : screenshot.stuck ? t("card.tooLong") : (screenshot.error ?? t("card.failed"))}
             </p>
             <button
               type="button"

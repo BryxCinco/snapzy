@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useT } from "@/components/preferences";
-import { isAllowedImageType, MAX_UPLOAD_BYTES } from "@/lib/uploads";
+import { isAllowedUpload, MAX_UPLOAD_BYTES } from "@/lib/uploads";
 import { uploadScreenshot } from "./actions";
 import { NAV_EVENTS } from "./mobile-nav";
 
@@ -24,8 +24,8 @@ export function UploadZone() {
     const accepted: File[] = [];
     const rejected: string[] = [];
     for (const file of files) {
-      if (!isAllowedImageType(file.type)) {
-        rejected.push(`${file.name}: only PNG, JPG, WEBP or GIF.`);
+      if (!isAllowedUpload(file)) {
+        rejected.push(`${file.name}: only PNG, JPG, WEBP, GIF or HEIC.`);
       } else if (file.size > MAX_UPLOAD_BYTES) {
         rejected.push(`${file.name}: file is larger than 10 MB.`);
       } else {
@@ -173,7 +173,7 @@ export function UploadZone() {
         <input
           ref={inputRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
+          accept="image/png,image/jpeg,image/webp,image/gif,image/heic,image/heif,.heic,.heif"
           multiple
           hidden
           onChange={(e) => {
