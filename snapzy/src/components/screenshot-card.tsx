@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { deleteScreenshot, retryProcessing } from "@/app/dashboard/actions";
 import { updateScreenshotCategory } from "@/app/dashboard/category-actions";
+import { confirmDialog } from "@/components/confirm-dialog";
 import { useT } from "@/components/preferences";
 import { toast } from "@/components/toast";
 import { copyToClipboard, downloadUrl } from "@/lib/clipboard";
@@ -132,8 +133,14 @@ export function ScreenshotCard({
     };
   }, [menuOpen]);
 
-  function handleDelete() {
-    if (!window.confirm(t("card.confirmDelete"))) return;
+  async function handleDelete() {
+    const ok = await confirmDialog({
+      title: t("confirm.deletePhotoTitle"),
+      message: t("card.confirmDelete"),
+      confirmLabel: t("confirm.delete"),
+      danger: true,
+    });
+    if (!ok) return;
     setError(null);
     startDelete(async () => {
       const result = await deleteScreenshot(screenshot.id);

@@ -8,6 +8,7 @@ import {
   Spinner,
 } from "@/components/screenshot-card";
 import { ScreenshotModal } from "@/components/screenshot-modal";
+import { confirmDialog } from "@/components/confirm-dialog";
 import { recordSortRun, useT } from "@/components/preferences";
 import { Toaster } from "@/components/toast";
 import { colorStyles, SORT_BATCH, type UserCategory } from "@/lib/categories";
@@ -251,10 +252,12 @@ export function GalleryView({
     });
   }
 
-  function reanalyze(list: ScreenshotCardData[], label: string) {
-    const ok = window.confirm(
-      t("notice.confirmReanalyze", { count: list.length, album: label }),
-    );
+  async function reanalyze(list: ScreenshotCardData[], label: string) {
+    const ok = await confirmDialog({
+      title: t("confirm.reanalyzeTitle"),
+      message: t("notice.confirmReanalyze", { count: list.length, album: label }),
+      confirmLabel: t("confirm.reanalyzeAction"),
+    });
     if (ok) analyze(list.map((c) => c.id), true);
   }
 

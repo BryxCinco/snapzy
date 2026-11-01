@@ -56,7 +56,7 @@ function Feedback({ state }: { state: AuthState }) {
 export function ForgotPasswordForm() {
   const [state, formAction, pending] = useActionState<AuthState, FormData>(requestPasswordReset, {});
   return (
-    <>
+    <div className="w-full max-w-sm">
       <Shell note="no worries" title="Forgot password?" subtitle="We'll email you a link to reset it">
         <form action={formAction} className="mt-8 space-y-4">
           <Field label="Email" htmlFor="email">
@@ -73,7 +73,7 @@ export function ForgotPasswordForm() {
           Back to log in
         </Link>
       </p>
-    </>
+    </div>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
+import { confirmDialog } from "@/components/confirm-dialog";
 import { type ThemeChoice, useLang, useSortSpeed, useT, useTheme } from "@/components/preferences";
 import { PasswordInput } from "@/components/password-input";
 import { Spinner } from "@/components/screenshot-card";
@@ -66,6 +67,7 @@ export function SettingsView({
   const t = useT();
   const { lang } = useLang();
   const speed = useSortSpeed();
+  const [loggingOut, startLogout] = useTransition();
   const joined = new Intl.DateTimeFormat(lang === "tl" ? "fil-PH" : "en", {
     dateStyle: "long",
   }).format(new Date(joinedAt));
@@ -103,17 +105,27 @@ export function SettingsView({
             </dl>
           </div>
           <PasswordForm />
-          <form action={logout} className="mt-5 border-t border-line pt-5">
+          <div className="mt-5 border-t border-line pt-5">
             <button
-              type="submit"
-              className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-red-600 ring-1 ring-red-200 transition hover:bg-red-50 dark:ring-red-500/30 dark:hover:bg-red-500/10"
+              type="button"
+              disabled={loggingOut}
+              onClick={async () => {
+                const ok = await confirmDialog({
+                  title: t("confirm.logoutTitle"),
+                  message: t("confirm.logoutBody"),
+                  confirmLabel: t("settings.logout"),
+                  danger: true,
+                });
+                if (ok) startLogout(() => logout());
+              }}
+              className="flex items-center gap-2 disabled:opacity-60 rounded-full px-4 py-2 text-sm font-semibold text-red-600 ring-1 ring-red-200 transition hover:bg-red-50 dark:ring-red-500/30 dark:hover:bg-red-500/10"
             >
               <svg aria-hidden viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-4 w-4">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 17l5-5-5-5M20 12H9M12 20H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h6" />
               </svg>
               {t("settings.logout")}
             </button>
-          </form>
+          </div>
         </section>
 
         <section className={`${CARD} animate-rise md:col-span-2`} style={{ animationDelay: "60ms" }}>
@@ -342,67 +354,41 @@ function DangerAction({
   run: (confirmation: string) => Promise<{ ok: true } | { ok: false; error: string }>;
 }) {
   const t = useT();
-  const [confirming, setConfirming] = useState(false);
-  const [typed, setTyped] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  async function onClick() {
+    const ok = await confirmDialog({
+      title,
+      message: hint,
+      confirmLabel: t("settings.confirm"),
+      danger: true,
+      requireText: "DELETE",
+      requireTextLabel: t("settings.typeToConfirm"),
+    });
+    if (!ok) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await run("DELETE");
+      if (!result.ok) return setError(result.error);
+      toast(done);
+    });
+  }
 
   return (
     <div className="rounded-3xl bg-red-50/60 p-5 ring-1 ring-red-100 dark:bg-red-500/5 dark:ring-red-500/20">
       <p className="font-semibold text-ink">{title}</p>
       <p className="mt-0.5 text-sm text-mute">{hint}</p>
-      {confirming ? (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            setError(null);
-            startTransition(async () => {
-              const result = await run(typed);
-              if (!result.ok) return setError(result.error);
-              toast(done);
-              setTyped("");
-              setConfirming(false);
-            });
-          }}
-          className="mt-4 flex flex-wrap items-center gap-2"
-        >
-          <input
-            autoFocus
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            placeholder={t("settings.typeToConfirm")}
-            aria-label={t("settings.typeToConfirm")}
-            className="h-10 min-w-0 flex-1 rounded-full bg-card px-4 font-mono text-sm text-ink ring-1 ring-red-200 outline-none placeholder:font-sans placeholder:text-mute/70 focus:ring-2 focus:ring-red-400 dark:ring-red-500/30"
-          />
-          <button
-            type="submit"
-            disabled={pending || typed !== "DELETE"}
-            className="flex h-10 items-center gap-1.5 rounded-full bg-red-500 px-4 text-sm font-semibold text-white transition hover:bg-red-600 disabled:opacity-40"
-          >
-            {pending && <Spinner />}
-            {t("settings.confirm")}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setConfirming(false);
-              setTyped("");
-            }}
-            className="h-10 rounded-full px-3 text-sm font-medium text-mute hover:text-ink"
-          >
-            {t("settings.cancel")}
-          </button>
-          {error && <p className="w-full text-sm text-red-600">{error}</p>}
-        </form>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setConfirming(true)}
-          className="mt-4 rounded-full bg-card px-4 py-2 text-sm font-semibold text-red-600 shadow-soft ring-1 ring-red-200 transition hover:bg-red-50 dark:ring-red-500/30 dark:hover:bg-red-500/10"
-        >
-          {title}
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={pending}
+        className="mt-4 flex items-center gap-1.5 rounded-full bg-card px-4 py-2 text-sm font-semibold text-red-600 shadow-soft ring-1 ring-red-200 transition hover:bg-red-50 disabled:opacity-60 dark:ring-red-500/30 dark:hover:bg-red-500/10"
+      >
+        {pending && <Spinner />}
+        {title}
+      </button>
+      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
     </div>
   );
 }
@@ -435,9 +421,15 @@ function DeleteAccount({ email }: { email: string }) {
 
       {open && (
         <form
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            if (!window.confirm(t("settings.deleteAccountConfirm", { email }))) return;
+            const ok = await confirmDialog({
+              title: t("confirm.deleteAccountTitle"),
+              message: t("settings.deleteAccountConfirm", { email }),
+              confirmLabel: t("settings.deleteForever"),
+              danger: true,
+            });
+            if (!ok) return;
             setError(null);
             startTransition(async () => {
               // On success the action redirects away, so only errors return.

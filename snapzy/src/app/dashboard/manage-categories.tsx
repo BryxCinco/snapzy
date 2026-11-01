@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Spinner } from "@/components/screenshot-card";
+import { confirmDialog } from "@/components/confirm-dialog";
 import { toast } from "@/components/toast";
 import {
   CATEGORY_COLORS,
@@ -122,13 +123,19 @@ function ManageCategoriesPanel({
     });
   }
 
-  function remove(category: UserCategory) {
+  async function remove(category: UserCategory) {
     const count = counts.get(category.id) ?? 0;
     const message =
       count > 0
         ? `Delete "${category.name}"? Its ${count} photo${count === 1 ? "" : "s"} will move to "${fallback?.name ?? "Other"}".`
         : `Delete "${category.name}"?`;
-    if (!window.confirm(message)) return;
+    const ok = await confirmDialog({
+      title: "Delete album?",
+      message,
+      confirmLabel: "Delete",
+      danger: true,
+    });
+    if (!ok) return;
     setError(null);
     setPendingId(category.id);
     startTransition(async () => {

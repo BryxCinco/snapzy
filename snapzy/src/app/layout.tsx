@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Caveat, Poppins } from "next/font/google";
+import { ConfirmHost } from "@/components/confirm-dialog";
 import { ThemeSync } from "@/components/preferences";
 import { themeBootScript } from "@/lib/theme-boot";
 import "./globals.css";
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           doesn't break position: sticky. */}
       <body className="flex min-h-full flex-col overflow-x-clip bg-paper font-sans text-ink">
         <ThemeSync />
+        <ConfirmHost />
         {children}
       </body>
     </html>
