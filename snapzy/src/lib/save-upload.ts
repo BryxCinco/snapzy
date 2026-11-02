@@ -63,7 +63,7 @@ async function stripMetadata(image: Uint8Array, mime: string): Promise<Uint8Arra
 
 // A small WebP preview for the gallery grid. Fits inside THUMB_SIZE x THUMB_SIZE
 // without cropping, so tall screenshots keep their shape.
-async function makeThumbnail(image: Uint8Array) {
+export async function makeThumbnail(image: Uint8Array) {
   return sharp(image)
     .rotate()
     .resize(THUMB_SIZE, THUMB_SIZE, { fit: "inside", withoutEnlargement: true })

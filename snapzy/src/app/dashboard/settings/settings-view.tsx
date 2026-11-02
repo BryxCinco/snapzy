@@ -182,6 +182,7 @@ export function SettingsView({
               done={t("settings.reset")}
               run={resetCategories}
             />
+            <ThumbnailBackfill />
             <DeleteAccount email={email} />
           </div>
         </section>
@@ -338,6 +339,72 @@ function LanguagePicker() {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+type BackfillReply = {
+  error?: string;
+  processed?: number;
+  failed?: number;
+  remaining?: number;
+  nextCursor?: string | null;
+};
+
+// One-time fix for old photos: asks the server to make thumbnails a few at a
+// time (see api/backfill-thumbnails) until none are left.
+function ThumbnailBackfill() {
+  const t = useT();
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
+
+  async function run() {
+    setRunning(true);
+    let made = 0;
+    let failed = 0;
+    let cursor: string | null = null;
+    try {
+      do {
+        const res: Response = await fetch(
+          `/api/backfill-thumbnails${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+          { method: "POST" },
+        );
+        const data = (await res.json()) as BackfillReply;
+        if (!res.ok || data.error) {
+          toast(data.error ?? t("settings.thumbsFailed"));
+          return;
+        }
+        made += data.processed ?? 0;
+        failed += data.failed ?? 0;
+        cursor = data.nextCursor ?? null;
+        setProgress(t("settings.thumbsProgress", { made, left: data.remaining ?? 0 }));
+      } while (cursor);
+      toast(
+        failed > 0
+          ? t("settings.thumbsDoneFailed", { made, failed })
+          : t("settings.thumbsDone", { made }),
+      );
+    } catch {
+      toast(t("settings.thumbsFailed"));
+    } finally {
+      setRunning(false);
+      setProgress(null);
+    }
+  }
+
+  return (
+    <div className="rounded-3xl bg-paper p-4 ring-1 ring-line">
+      <p className="text-sm font-semibold text-ink">{t("settings.thumbs")}</p>
+      <p className="mt-1 text-xs text-mute">{t("settings.thumbsHint")}</p>
+      <button
+        type="button"
+        onClick={run}
+        disabled={running}
+        className="mt-3 flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white transition hover:bg-brand-deep disabled:opacity-60"
+      >
+        {running && <Spinner />}
+        {running ? (progress ?? t("settings.thumbsWorking")) : t("settings.thumbsRun")}
+      </button>
     </div>
   );
 }
